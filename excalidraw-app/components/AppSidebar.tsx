@@ -6,7 +6,13 @@ import {
 import { LinkButton } from "@excalidraw/excalidraw/components/LinkButton";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
+import { WORKSPACE_SIDEBAR_TAB } from "../data/WorkspaceData";
+
+import { WorkspaceFolderIcon, WorkspaceSidebar } from "./WorkspaceSidebar";
+
 import "./AppSidebar.scss";
+
+import type { WorkspaceController } from "./WorkspaceSidebar";
 
 type SidebarPromoCopyProps = {
   text: string;
@@ -65,12 +71,26 @@ const SidebarPromoCopy = (props: SidebarPromoCopyProps) => {
   );
 };
 
-export const AppSidebar = () => {
+export const AppSidebar = ({
+  workspaceController,
+}: {
+  workspaceController: WorkspaceController;
+}) => {
   const { theme, openSidebar } = useUIAppState();
 
   return (
     <DefaultSidebar>
       <DefaultSidebar.TabTriggers>
+        <Sidebar.TabTrigger
+          tab={WORKSPACE_SIDEBAR_TAB}
+          aria-label="Workspace"
+          title="Workspace"
+          style={{
+            opacity: openSidebar?.tab === WORKSPACE_SIDEBAR_TAB ? 1 : 0.4,
+          }}
+        >
+          <WorkspaceFolderIcon />
+        </Sidebar.TabTrigger>
         <Sidebar.TabTrigger
           tab="comments"
           style={{ opacity: openSidebar?.tab === "comments" ? 1 : 0.4 }}
@@ -84,6 +104,9 @@ export const AppSidebar = () => {
           {presentationIcon}
         </Sidebar.TabTrigger>
       </DefaultSidebar.TabTriggers>
+      <Sidebar.Tab tab={WORKSPACE_SIDEBAR_TAB}>
+        <WorkspaceSidebar {...workspaceController} />
+      </Sidebar.Tab>
       <Sidebar.Tab tab="comments">
         <div className="app-sidebar-promo-container">
           <div

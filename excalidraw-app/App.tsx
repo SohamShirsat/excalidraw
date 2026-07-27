@@ -7,6 +7,8 @@ import {
   useEditorInterface,
   ExcalidrawAPIProvider,
   useExcalidrawAPI,
+  DefaultSidebar,
+  serializeAsJSON,
 } from "@excalidraw/excalidraw";
 import { trackEvent } from "@excalidraw/excalidraw/analytics";
 import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
@@ -146,8 +148,27 @@ import "./index.scss";
 
 import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
 import { AppSidebar } from "./components/AppSidebar";
+import { WorkspaceFolderIcon } from "./components/WorkspaceSidebar";
+import {
+  WorkspaceData,
+  WORKSPACE_SIDEBAR_TAB,
+  addWorkspaceFile,
+  addWorkspaceFolder,
+  addWorkspacePage,
+  getWorkspacePageIds,
+  removeWorkspaceItem,
+  renameWorkspaceItem,
+} from "./data/WorkspaceData";
 
 import type { CollabAPI } from "./collab/Collab";
+import type {
+  WorkspaceController,
+  WorkspaceSaveStatus,
+} from "./components/WorkspaceSidebar";
+import type {
+  WorkspaceItemType,
+  WorkspaceMetadata,
+} from "./data/WorkspaceData";
 
 polyfill();
 
@@ -393,6 +414,20 @@ const ExcalidrawWrapper = () => {
       resolvablePromise<ExcalidrawInitialDataState | null>();
   }
 
+  const [workspace, setWorkspace] = useState<WorkspaceMetadata | null>(null);
+  const [workspaceSaveStatus, setWorkspaceSaveStatus] =
+    useState<WorkspaceSaveStatus>("loading");
+  const workspaceRef = useRef<WorkspaceMetadata | null>(null);
+  const activeWorkspacePageIdRef = useRef<string | null>(null);
+  const isWorkspaceSwitchingRef = useRef(false);
+  const isWorkspaceAutosaveEnabledRef = useRef(false);
+
+  const commitWorkspaceState = useCallback((next: WorkspaceMetadata) => {
+    workspaceRef.current = next;
+    activeWorkspacePageIdRef.current = next.activePageId;
+    setWorkspace(next);
+  }, []);
+
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -467,6 +502,9 @@ const ExcalidrawWrapper = () => {
             }
             return acc;
           }, [] as FileId[]) || [];
+        const embeddedFileIds = new Set(
+          Object.keys(data.scene.files || {}) as FileId[],
+        );
 
         if (data.isExternalScene) {
           if (fileIds.length) {
@@ -494,9 +532,12 @@ const ExcalidrawWrapper = () => {
             ]);
           });
         } else if (isInitialLoad) {
-          if (fileIds.length) {
+          const locallyStoredFileIds = fileIds.filter(
+            (fileId) => !embeddedFileIds.has(fileId),
+          );
+          if (locallyStoredFileIds.length) {
             LocalData.fileStorage
-              .getFiles(fileIds)
+              .getFiles(locallyStoredFileIds)
               .then(async ({ loadedFiles, erroredFiles }) => {
                 if (loadedFiles.length) {
                   excalidrawAPI.addFiles(loadedFiles);
@@ -525,8 +566,58 @@ const ExcalidrawWrapper = () => {
     }
 
     initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
-      loadImages(data, /* isInitialLoad */ true);
-      initialStatePromiseRef.current.promise.resolve(data.scene);
+      let initialData = data;
+
+      try {
+        const initialFileName =
+          data.scene?.appState?.name || excalidrawAPI.getName();
+        const loadedWorkspace = await WorkspaceData.loadOrCreate(
+          initialFileName,
+        );
+
+        commitWorkspaceState(loadedWorkspace);
+        isWorkspaceAutosaveEnabledRef.current =
+          !data.isExternalScene && !collabAPI?.isCollaborating();
+
+        if (isWorkspaceAutosaveEnabledRef.current) {
+          const storedScene = await WorkspaceData.loadPageScene(
+            loadedWorkspace.activePageId,
+          );
+
+          if (storedScene) {
+            const workspaceScene = await loadFromBlob(
+              new Blob([storedScene], { type: "application/json" }),
+              excalidrawAPI.getAppState(),
+              null,
+            );
+            const activePage = loadedWorkspace.pages.find(
+              (page) => page.id === loadedWorkspace.activePageId,
+            );
+            const activeFile = loadedWorkspace.files.find(
+              (file) => file.id === activePage?.fileId,
+            );
+
+            initialData = {
+              ...data,
+              scene: {
+                ...workspaceScene,
+                appState: {
+                  ...workspaceScene.appState,
+                  name: activeFile?.name || "Untitled file",
+                },
+              },
+            };
+          }
+        }
+
+        setWorkspaceSaveStatus("saved");
+      } catch (error) {
+        console.error(error);
+        setWorkspaceSaveStatus("error");
+      }
+
+      loadImages(initialData, /* isInitialLoad */ true);
+      initialStatePromiseRef.current.promise.resolve(initialData.scene);
     });
 
     const onHashChange = async (event: HashChangeEvent) => {
@@ -617,11 +708,13 @@ const ExcalidrawWrapper = () => {
 
     const onUnload = () => {
       LocalData.flushSave();
+      WorkspaceData.flushScheduledPageSave();
     };
 
     const visibilityChange = (event: FocusEvent | Event) => {
       if (event.type === EVENT.BLUR || document.hidden) {
         LocalData.flushSave();
+        WorkspaceData.flushScheduledPageSave();
       }
       if (
         event.type === EVENT.VISIBILITY_CHANGE ||
@@ -647,11 +740,19 @@ const ExcalidrawWrapper = () => {
         false,
       );
     };
-  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
+  }, [
+    isCollabDisabled,
+    collabAPI,
+    excalidrawAPI,
+    setLangCode,
+    loadImages,
+    commitWorkspaceState,
+  ]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
       LocalData.flushSave();
+      WorkspaceData.flushScheduledPageSave();
 
       if (
         excalidrawAPI &&
@@ -681,6 +782,26 @@ const ExcalidrawWrapper = () => {
   ) => {
     if (collabAPI?.isCollaborating()) {
       collabAPI.syncElements(elements);
+    }
+
+    const activeWorkspacePageId = activeWorkspacePageIdRef.current;
+    if (
+      activeWorkspacePageId &&
+      isWorkspaceAutosaveEnabledRef.current &&
+      !isWorkspaceSwitchingRef.current &&
+      !collabAPI?.isCollaborating()
+    ) {
+      const scene = serializeAsJSON(elements, appState, files, "local");
+      const didScheduleSave = WorkspaceData.schedulePageSceneSave({
+        pageId: activeWorkspacePageId,
+        scene,
+        onComplete: (error) => {
+          setWorkspaceSaveStatus(error ? "error" : "saved");
+        },
+      });
+      if (didScheduleSave) {
+        setWorkspaceSaveStatus("saving");
+      }
     }
 
     // this check is redundant, but since this is a hot path, it's best
@@ -724,6 +845,290 @@ const ExcalidrawWrapper = () => {
         window.devicePixelRatio,
       );
     }
+  };
+
+  const reportWorkspaceError = (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "The local workspace could not complete that action.";
+    console.error(error);
+    setWorkspaceSaveStatus("error");
+    excalidrawAPI?.setToast({
+      message,
+      closable: true,
+      duration: 5000,
+    });
+  };
+
+  const saveActiveWorkspacePage = async () => {
+    const pageId = activeWorkspacePageIdRef.current;
+    if (!pageId || !excalidrawAPI) {
+      return;
+    }
+
+    WorkspaceData.cancelScheduledPageSave();
+    setWorkspaceSaveStatus("saving");
+    await WorkspaceData.savePageScene(
+      pageId,
+      excalidrawAPI.getSceneElementsIncludingDeleted(),
+      excalidrawAPI.getAppState(),
+      excalidrawAPI.getFiles(),
+    );
+    setWorkspaceSaveStatus("saved");
+  };
+
+  const activateWorkspacePage = async (
+    pageId: string,
+    nextWorkspace: WorkspaceMetadata,
+    saveCurrentPage: boolean,
+  ) => {
+    if (!excalidrawAPI) {
+      throw new Error("The drawing editor is still loading.");
+    }
+    if (collabAPI?.isCollaborating()) {
+      throw new Error(
+        "Workspace page switching is unavailable during live collaboration.",
+      );
+    }
+
+    const targetPage = nextWorkspace.pages.find((page) => page.id === pageId);
+    const targetFile = nextWorkspace.files.find(
+      (file) => file.id === targetPage?.fileId,
+    );
+    if (!targetPage || !targetFile) {
+      throw new Error("The selected workspace page no longer exists.");
+    }
+
+    if (
+      saveCurrentPage &&
+      activeWorkspacePageIdRef.current &&
+      activeWorkspacePageIdRef.current !== pageId
+    ) {
+      await saveActiveWorkspacePage();
+    } else {
+      WorkspaceData.cancelScheduledPageSave();
+    }
+
+    isWorkspaceSwitchingRef.current = true;
+    setWorkspaceSaveStatus("saving");
+
+    try {
+      const currentAppState = excalidrawAPI.getAppState();
+      const storedScene = await WorkspaceData.loadPageScene(pageId);
+      const defaultAppState = getDefaultAppState();
+      const targetScene = storedScene
+        ? await loadFromBlob(
+            new Blob([storedScene], { type: "application/json" }),
+            currentAppState,
+            null,
+          )
+        : {
+            elements: [],
+            appState: {
+              scrollX: defaultAppState.scrollX,
+              scrollY: defaultAppState.scrollY,
+              zoom: defaultAppState.zoom,
+              selectedElementIds: {},
+              selectedGroupIds: {},
+              editingGroupId: null,
+              editingElement: null,
+              selectedLinearElement: null,
+              activeTool: defaultAppState.activeTool,
+              viewBackgroundColor: defaultAppState.viewBackgroundColor,
+              gridSize: defaultAppState.gridSize,
+              gridStep: defaultAppState.gridStep,
+              gridModeEnabled: defaultAppState.gridModeEnabled,
+            },
+            files: {},
+          };
+
+      const metadata = {
+        ...nextWorkspace,
+        activePageId: pageId,
+        updatedAt: Date.now(),
+      };
+      await WorkspaceData.saveMetadata(metadata);
+      commitWorkspaceState(metadata);
+
+      const nextAppState = {
+        ...currentAppState,
+        ...targetScene.appState,
+        name: targetFile.name,
+        fileHandle: null,
+        openSidebar: currentAppState.openSidebar,
+        defaultSidebarDockedPreference:
+          currentAppState.defaultSidebarDockedPreference,
+        isLoading: false,
+      };
+
+      if (!storedScene) {
+        await WorkspaceData.savePageScene(pageId, [], nextAppState, {});
+      }
+
+      const targetFiles = Object.values(
+        (targetScene.files || {}) as BinaryFiles,
+      );
+      if (targetFiles.length) {
+        excalidrawAPI.addFiles(targetFiles);
+      }
+      excalidrawAPI.updateScene({
+        elements: targetScene.elements || [],
+        appState: nextAppState,
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+      excalidrawAPI.history.clear();
+
+      isWorkspaceAutosaveEnabledRef.current = true;
+      setWorkspaceSaveStatus("saved");
+    } finally {
+      window.requestAnimationFrame(() => {
+        isWorkspaceSwitchingRef.current = false;
+      });
+    }
+  };
+
+  const handleOpenWorkspacePage = async (pageId: string) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace || currentWorkspace.activePageId === pageId) {
+      return;
+    }
+
+    try {
+      await activateWorkspacePage(pageId, currentWorkspace, true);
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
+  const handleCreateWorkspaceFolder = async (name: string) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace) {
+      return;
+    }
+
+    try {
+      const result = addWorkspaceFolder(currentWorkspace, { name });
+      setWorkspaceSaveStatus("saving");
+      await WorkspaceData.saveMetadata(result.workspace);
+      commitWorkspaceState(result.workspace);
+      setWorkspaceSaveStatus("saved");
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
+  const handleCreateWorkspaceFile = async (folderId: string, name: string) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace) {
+      return;
+    }
+
+    try {
+      const result = addWorkspaceFile(currentWorkspace, folderId, { name });
+      await activateWorkspacePage(result.page.id, result.workspace, true);
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
+  const handleCreateWorkspacePage = async (fileId: string, name: string) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace) {
+      return;
+    }
+
+    try {
+      const result = addWorkspacePage(currentWorkspace, fileId, { name });
+      await activateWorkspacePage(result.page.id, result.workspace, true);
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
+  const handleRenameWorkspaceItem = async (
+    type: WorkspaceItemType,
+    id: string,
+    name: string,
+  ) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace) {
+      return;
+    }
+
+    try {
+      const nextWorkspace = renameWorkspaceItem(
+        currentWorkspace,
+        type,
+        id,
+        name,
+      );
+      setWorkspaceSaveStatus("saving");
+      await WorkspaceData.saveMetadata(nextWorkspace);
+      commitWorkspaceState(nextWorkspace);
+
+      if (type === "file" && excalidrawAPI) {
+        const activePage = nextWorkspace.pages.find(
+          (page) => page.id === nextWorkspace.activePageId,
+        );
+        if (activePage?.fileId === id) {
+          excalidrawAPI.updateScene({
+            appState: { name },
+            captureUpdate: CaptureUpdateAction.NEVER,
+          });
+        }
+      }
+
+      setWorkspaceSaveStatus("saved");
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
+  const handleDeleteWorkspaceItem = async (
+    type: WorkspaceItemType,
+    id: string,
+  ) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace) {
+      return;
+    }
+
+    try {
+      const removedPageIds = getWorkspacePageIds(currentWorkspace, type, id);
+      const nextWorkspace = removeWorkspaceItem(currentWorkspace, type, id);
+      const removesActivePage = removedPageIds.includes(
+        currentWorkspace.activePageId,
+      );
+
+      if (removesActivePage) {
+        await activateWorkspacePage(
+          nextWorkspace.activePageId,
+          nextWorkspace,
+          false,
+        );
+      } else {
+        setWorkspaceSaveStatus("saving");
+        await WorkspaceData.saveMetadata(nextWorkspace);
+        commitWorkspaceState(nextWorkspace);
+      }
+
+      await WorkspaceData.deletePageScenes(removedPageIds);
+      setWorkspaceSaveStatus("saved");
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
+  const workspaceController: WorkspaceController = {
+    workspace,
+    saveStatus: workspaceSaveStatus,
+    onOpenPage: handleOpenWorkspacePage,
+    onCreateFolder: handleCreateWorkspaceFolder,
+    onCreateFile: handleCreateWorkspaceFile,
+    onCreatePage: handleCreateWorkspacePage,
+    onRenameItem: handleRenameWorkspaceItem,
+    onDeleteItem: handleDeleteWorkspaceItem,
   };
 
   const [latestShareableLink, setLatestShareableLink] = useState<string | null>(
@@ -987,6 +1392,13 @@ const ExcalidrawWrapper = () => {
           }
         }}
       >
+        <DefaultSidebar.Trigger
+          title="Workspace"
+          tab={WORKSPACE_SIDEBAR_TAB}
+          icon={<WorkspaceFolderIcon />}
+        >
+          Workspace
+        </DefaultSidebar.Trigger>
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
           isCollaborating={isCollaborating}
@@ -1060,7 +1472,7 @@ const ExcalidrawWrapper = () => {
           }}
         />
 
-        <AppSidebar />
+        <AppSidebar workspaceController={workspaceController} />
 
         {errorMessage && (
           <ErrorDialog onClose={() => setErrorMessage("")}>
