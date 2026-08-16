@@ -1,0 +1,19 @@
+.excalidraw {
+  .quick-access-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+
+    &__button {
+      --button-width: var(--default-button-size);
+      --button-height: var(--default-button-size);
+
+      flex-shrink: 0;
+
+      svg {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+    }
+  }
+}

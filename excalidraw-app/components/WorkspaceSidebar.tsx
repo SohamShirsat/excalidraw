@@ -344,9 +344,9 @@ const getSaveLabel = (status: WorkspaceSaveStatus) => {
     case "saving":
       return "Saving…";
     case "error":
-      return "Save failed";
+      return "Repository save failed";
     default:
-      return "Saved locally";
+      return "Saved to repository";
   }
 };
 
@@ -901,9 +901,9 @@ export const WorkspaceSidebar = ({
       </div>
 
       <div className="workspace-storage-note">
-        <span>Stored only on this device</span>
+        <span>Repository: personal-workspace/</span>
         <span aria-hidden="true">•</span>
-        <span>Autosave enabled</span>
+        <span>Browser cache fallback</span>
       </div>
     </div>
   );

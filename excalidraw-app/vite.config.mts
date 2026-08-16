@@ -8,6 +8,7 @@ import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
+import { personalWorkspaceServer } from "./scripts/PersonalWorkspaceServer";
 export default defineConfig(({ mode }) => {
   // To load .env variables
   const envVars = loadEnv(mode, `../`);
@@ -132,6 +133,7 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 0,
     },
     plugins: [
+      personalWorkspaceServer(path.resolve(__dirname, "..")),
       Sitemap({
         hostname: "https://excalidraw.com",
         outDir: "build",

@@ -59,6 +59,71 @@ const workspaceStore = createStore(
 
 const METADATA_KEY = "metadata";
 const sceneKey = (pageId: string) => `scene:${pageId}`;
+const REPOSITORY_API = "/api/personal-workspace";
+
+type RepositoryWorkspaceStatus = {
+  workspace: WorkspaceMetadata | null;
+  missingPageIds: string[];
+  directory: string;
+};
+
+const repositoryRequest = async <T>(
+  pathname: string,
+  init?: RequestInit,
+): Promise<T> => {
+  let response: Response;
+  try {
+    response = await fetch(`${REPOSITORY_API}${pathname}`, {
+      ...init,
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      "The repository workspace is unavailable. Start Personal Excalidraw with its local launcher.",
+      { cause: error },
+    );
+  }
+
+  const body = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(
+      body.error ||
+        "Personal Excalidraw could not save to personal-workspace/.",
+    );
+  }
+
+  return body;
+};
+
+const loadRepositoryWorkspace = () =>
+  repositoryRequest<RepositoryWorkspaceStatus>("");
+
+const saveRepositoryMetadata = (workspace: WorkspaceMetadata) =>
+  repositoryRequest<{ saved: true }>("/metadata", {
+    method: "PUT",
+    body: JSON.stringify(workspace),
+  });
+
+const loadRepositoryPageScene = (pageId: string) =>
+  repositoryRequest<{ scene: string | null }>(
+    `/pages/${encodeURIComponent(pageId)}`,
+  );
+
+const saveRepositoryPageScene = (pageId: string, scene: string) =>
+  repositoryRequest<{ saved: true }>(`/pages/${encodeURIComponent(pageId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ scene }),
+  });
+
+const deleteRepositoryPageScenes = (pageIds: string[]) =>
+  repositoryRequest<{ deleted: true }>("/pages", {
+    method: "DELETE",
+    body: JSON.stringify({ pageIds }),
+  });
 
 const createId: WorkspaceIdFactory = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -390,8 +455,7 @@ export class WorkspaceData {
   private static _saveScene = debounce(
     async ({ pageId, scene, onComplete }: ScheduledSceneSave) => {
       try {
-        await set(sceneKey(pageId), scene, workspaceStore);
-        WorkspaceData._savedSceneJSON.set(pageId, scene);
+        await WorkspaceData.savePageSceneJSON(pageId, scene);
         onComplete?.(null);
       } catch (error: any) {
         console.error(error);
@@ -410,30 +474,59 @@ export class WorkspaceData {
   );
 
   static async loadOrCreate(initialFileName?: string) {
-    const storedWorkspace = await get<WorkspaceMetadata>(
+    const repositoryStatus = await loadRepositoryWorkspace();
+    const cachedWorkspace = await get<WorkspaceMetadata>(
       METADATA_KEY,
       workspaceStore,
     );
 
-    if (isWorkspaceMetadata(storedWorkspace)) {
-      return storedWorkspace;
+    if (isWorkspaceMetadata(repositoryStatus.workspace)) {
+      await set(METADATA_KEY, repositoryStatus.workspace, workspaceStore);
+
+      for (const pageId of repositoryStatus.missingPageIds) {
+        const cachedScene = await get<string>(sceneKey(pageId), workspaceStore);
+        if (cachedScene) {
+          await saveRepositoryPageScene(pageId, cachedScene);
+        }
+      }
+
+      return repositoryStatus.workspace;
     }
 
-    const workspace = createInitialWorkspace(initialFileName);
+    const workspace = isWorkspaceMetadata(cachedWorkspace)
+      ? cachedWorkspace
+      : createInitialWorkspace(initialFileName);
     await WorkspaceData.saveMetadata(workspace);
+
+    for (const page of workspace.pages) {
+      const cachedScene = await get<string>(sceneKey(page.id), workspaceStore);
+      if (cachedScene) {
+        await saveRepositoryPageScene(page.id, cachedScene);
+      }
+    }
+
     return workspace;
   }
 
-  static saveMetadata(workspace: WorkspaceMetadata) {
-    return set(METADATA_KEY, workspace, workspaceStore);
+  static async saveMetadata(workspace: WorkspaceMetadata) {
+    await saveRepositoryMetadata(workspace);
+    await set(METADATA_KEY, workspace, workspaceStore);
   }
 
   static async loadPageScene(pageId: string) {
-    const scene = await get<string>(sceneKey(pageId), workspaceStore);
+    const { scene } = await loadRepositoryPageScene(pageId);
     if (scene) {
+      await set(sceneKey(pageId), scene, workspaceStore);
       WorkspaceData._savedSceneJSON.set(pageId, scene);
+      return scene;
     }
-    return scene;
+
+    const cachedScene = await get<string>(sceneKey(pageId), workspaceStore);
+    if (cachedScene) {
+      await saveRepositoryPageScene(pageId, cachedScene);
+      WorkspaceData._savedSceneJSON.set(pageId, cachedScene);
+    }
+    return cachedScene;
   }
 
   static async savePageScene(
@@ -449,6 +542,7 @@ export class WorkspaceData {
   }
 
   static async savePageSceneJSON(pageId: string, scene: string) {
+    await saveRepositoryPageScene(pageId, scene);
     await set(sceneKey(pageId), scene, workspaceStore);
     WorkspaceData._savedSceneJSON.set(pageId, scene);
     WorkspaceData._pendingSceneJSON.delete(pageId);
@@ -477,6 +571,7 @@ export class WorkspaceData {
   }
 
   static async deletePageScenes(pageIds: string[]) {
+    await deleteRepositoryPageScenes(pageIds);
     await Promise.all(
       pageIds.map((pageId) => del(sceneKey(pageId), workspaceStore)),
     );

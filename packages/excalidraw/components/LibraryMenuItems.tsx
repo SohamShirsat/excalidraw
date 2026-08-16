@@ -13,6 +13,7 @@ import { duplicateElements } from "@excalidraw/element";
 import clsx from "clsx";
 
 import { deburr } from "../deburr";
+import { atom, useAtom } from "../editor-jotai";
 
 import { useLibraryCache } from "../hooks/useLibraryItemSvg";
 import { useScrollPosition } from "../hooks/useScrollPosition";
@@ -51,6 +52,29 @@ const ITEMS_RENDERED_PER_BATCH = 17;
 // when render outputs cached we can render many more items per batch to
 // speed it up
 const CACHED_ITEMS_RENDERED_PER_BATCH = 64;
+
+export const librarySearchQueryAtom = atom("");
+
+const getLibraryItemSearchText = (item: LibraryItem) =>
+  [
+    item.name || "",
+    ...item.elements.map((element) => {
+      const text =
+        element.type === "text" && "text" in element ? element.text : "";
+      const name =
+        (element.type === "frame" || element.type === "magicframe") &&
+        "name" in element
+          ? element.name || ""
+          : "";
+      return [
+        element.type,
+        text,
+        name,
+        element.link || "",
+        element.customData ? JSON.stringify(element.customData) : "",
+      ].join(" ");
+    }),
+  ].join(" ");
 
 export default function LibraryMenuItems({
   isLoading,
@@ -91,7 +115,9 @@ export default function LibraryMenuItems({
     LibraryItem["id"] | null
   >(null);
 
-  const [searchInputValue, setSearchInputValue] = useState("");
+  const [searchInputValue, setSearchInputValue] = useAtom(
+    librarySearchQueryAtom,
+  );
 
   const IS_LIBRARY_EMPTY = !libraryItems.length && !pendingElements.length;
 
@@ -104,9 +130,8 @@ export default function LibraryMenuItems({
     }
 
     return libraryItems.filter((item) => {
-      const itemName = item.name || "";
-      return (
-        itemName.trim() && deburr(itemName.toLowerCase()).includes(searchQuery)
+      return deburr(getLibraryItemSearchText(item).toLowerCase()).includes(
+        searchQuery,
       );
     });
   }, [libraryItems, searchInputValue]);

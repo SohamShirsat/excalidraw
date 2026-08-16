@@ -61,12 +61,15 @@ export const DefaultSidebar = Object.assign(
       className,
       onDock,
       docked,
+      searchMenu,
       ...rest
     }: Merge<
       MarkOptional<Omit<SidebarProps, "name">, "children">,
       {
         /** pass `false` to disable docking */
         onDock?: SidebarProps["onDock"] | false;
+        /** host-provided replacement for the default canvas-only search */
+        searchMenu?: React.ReactNode;
       }
     >) => {
       const appState = useUIAppState();
@@ -112,7 +115,7 @@ export const DefaultSidebar = Object.assign(
               <LibraryMenu />
             </Sidebar.Tab>
             <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
-              <SearchMenu />
+              {searchMenu ?? <SearchMenu />}
             </Sidebar.Tab>
             {children}
           </Sidebar.Tabs>
