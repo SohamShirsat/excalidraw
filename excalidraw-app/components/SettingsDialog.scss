@@ -222,6 +222,118 @@
     margin: 0;
   }
 
+  // ---- Settings → Sync (GithubSyncSettings.tsx) ----------------------------
+  .settings-sync-copy,
+  .settings-sync-note {
+    display: block;
+    margin: 0.5rem 0 0;
+    color: var(--color-gray-60);
+    font-size: 0.75rem;
+    font-weight: 400;
+  }
+
+  .settings-sync-form .settings-field,
+  .settings-field {
+    input[type="text"],
+    input[type="password"],
+    input:not([type]),
+    select {
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--dialog-border-color);
+      border-radius: var(--border-radius-md);
+      background: var(--input-bg-color);
+      color: var(--text-primary-color);
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 400;
+    }
+
+    small {
+      color: var(--color-gray-60);
+      font-size: 0.7rem;
+      font-weight: 400;
+      line-height: 1.45;
+    }
+  }
+
+  .settings-sync-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+
+    input {
+      margin: 0;
+    }
+  }
+
+  .settings-sync-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.95rem 0 0;
+
+    button {
+      padding: 0.5rem 0.9rem;
+      border: 1px solid transparent;
+      border-radius: var(--border-radius-md);
+      background: var(--color-primary);
+      color: var(--color-on-primary-container);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      &.is-secondary {
+        border-color: var(--dialog-border-color);
+        background: transparent;
+        color: var(--text-primary-color);
+        font-weight: 500;
+      }
+    }
+  }
+
+  .settings-sync-error {
+    margin: 0.75rem 0 0;
+    padding: 0.6rem 0.7rem;
+    border-radius: var(--border-radius-md);
+    background: var(--color-danger-background);
+    color: var(--color-danger);
+    font-size: 0.75rem;
+  }
+
+  .settings-sync-conflict {
+    margin: 1rem 0 0;
+    padding: 0.85rem;
+    border: 1px solid var(--color-warning-dark, var(--dialog-border-color));
+    border-radius: var(--border-radius-md);
+    background: var(--color-surface-low);
+
+    strong {
+      font-size: 0.85rem;
+    }
+
+    p,
+    small {
+      display: block;
+      margin: 0.35rem 0 0;
+      color: var(--color-gray-60);
+      font-size: 0.75rem;
+    }
+
+    ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.1rem;
+      color: var(--color-gray-60);
+      font-size: 0.72rem;
+    }
+  }
+
   @media (max-width: 600px) {
     .settings-dialog-layout {
       grid-template-columns: 1fr;

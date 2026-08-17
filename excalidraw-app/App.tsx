@@ -107,6 +107,7 @@ import { LibraryDockPanel, SearchDockPanel } from "./components/DockPortals";
 import { WorkspaceSearchDialog } from "./components/WorkspaceSearchDialog";
 import { EditorTabBar } from "./components/EditorTabBar";
 import { NewPageDialog } from "./components/NewPageDialog";
+import { PagePalette } from "./components/PagePalette";
 import { SecondaryPagePane } from "./components/SecondaryPagePane";
 import "./components/AppLayout.scss";
 import "./components/CanvasChrome.scss";
@@ -119,6 +120,8 @@ import {
   removeWorkspaceItem,
   renameWorkspaceItem,
 } from "./data/WorkspaceData";
+import { recordRecentPage } from "./data/recentPages";
+import { syncGithubNow, useGithubSyncStatus } from "./data/githubSync";
 
 import type { EditorTab } from "./components/EditorTabBar";
 import type { NewPageDialogSubmitInput } from "./components/NewPageDialog";
@@ -204,8 +207,14 @@ const ExcalidrawWrapper = () => {
   const [workspaceDirectory, setWorkspaceDirectory] = useState<string | null>(
     null,
   );
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // `null` = closed. Otherwise the section Settings opens on, so the rail's
+  // sync badge can land the user directly on Settings → Sync.
+  const [settingsSection, setSettingsSection] = useState<
+    "general" | "sync" | null
+  >(null);
   const [isWorkspaceSearchOpen, setIsWorkspaceSearchOpen] = useState(false);
+  const { status: githubSyncStatus, setStatus: setGithubSyncStatus } =
+    useGithubSyncStatus();
   const [appVersion, setAppVersion] = useState("Development build");
   const workspaceRef = useRef<WorkspaceMetadata | null>(null);
   const activeWorkspacePageIdRef = useRef<string | null>(null);
@@ -325,6 +334,16 @@ const ExcalidrawWrapper = () => {
     (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
   };
 
+  // Two distinct surfaces, deliberately not merged:
+  //  - `pagePaletteTarget` drives the Ctrl/Cmd+T palette, which OPENS an
+  //    existing page (search first, "New page…" as its last row).
+  //  - `newPageDialogTarget` drives `NewPageDialog`, which CREATES one and
+  //    therefore has to ask which folder and file it belongs in.
+  // Both carry which pane the result lands in, so "new tab" in the split
+  // pane can't hijack the main canvas.
+  const [pagePaletteTarget, setPagePaletteTarget] = useState<
+    "primary" | "secondary" | null
+  >(null);
   const [newPageDialogTarget, setNewPageDialogTarget] = useState<
     "primary" | "secondary" | null
   >(null);
@@ -410,10 +429,13 @@ const ExcalidrawWrapper = () => {
       (actionId) => {
         switch (actionId) {
           case "open-settings":
-            setIsSettingsOpen(true);
+            setSettingsSection("general");
             break;
           case "open-workspace-search":
             setIsWorkspaceSearchOpen(true);
+            break;
+          case "open-page-palette":
+            setPagePaletteTarget("primary");
             break;
           case "open-new-page":
             setNewPageDialogTarget("primary");
@@ -855,6 +877,10 @@ const ExcalidrawWrapper = () => {
       throw new Error("The selected workspace page no longer exists.");
     }
 
+    // Feeds the page palette's "Recent" list (Ctrl/Cmd+T). Local-only, see
+    // `excalidraw-app/data/recentPages.ts`.
+    recordRecentPage(pageId);
+
     if (
       saveCurrentPage &&
       activeWorkspacePageIdRef.current &&
@@ -1094,6 +1120,7 @@ const ExcalidrawWrapper = () => {
   };
 
   const handleSplitPageToSecondary = (pageId: string) => {
+    recordRecentPage(pageId);
     setSecondaryPane((current) => {
       if (current) {
         const tabs = current.tabs.includes(pageId)
@@ -1213,6 +1240,8 @@ const ExcalidrawWrapper = () => {
           case "KeyP":
             return run(() => setIsWorkspaceSearchOpen(true));
           case "KeyT":
+            return run(() => setPagePaletteTarget("primary"));
+          case "KeyN":
             return run(() => setNewPageDialogTarget("primary"));
         }
         return;
@@ -1246,7 +1275,20 @@ const ExcalidrawWrapper = () => {
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
-  // Backs the Ctrl/Cmd+T "New page" flow. Folder/file creation reuse the
+  // Backs the Ctrl/Cmd+T page palette. Opening always routes to whichever
+  // pane asked for the palette; `handleOpenWorkspacePage` already appends
+  // the page to the primary tab strip via the `workspace` effect above.
+  const handlePagePaletteOpen = (pageId: string) => {
+    const target = pagePaletteTarget ?? "primary";
+    setPagePaletteTarget(null);
+    if (target === "secondary") {
+      handleSplitPageToSecondary(pageId);
+      return;
+    }
+    void handleOpenWorkspacePage(pageId);
+  };
+
+  // Backs the "New page…" flow. Folder/file creation reuse the
   // exact same pure `WorkspaceData` helpers the rail's inline "+" buttons
   // use; the only new piece is routing the *result* to whichever pane asked
   // for it without letting a "new page → secondary" request silently steal
@@ -1437,9 +1479,19 @@ const ExcalidrawWrapper = () => {
         <LeftDock
           state={leftDock}
           workspaceController={workspaceController}
-          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenSettings={() => setSettingsSection("general")}
           onLibraryHostChange={setLibraryHost}
           onSearchHostChange={setSearchHost}
+          githubSyncStatus={githubSyncStatus}
+          onSyncNow={() => {
+            void syncGithubNow()
+              .then(setGithubSyncStatus)
+              .catch((error) => {
+                console.error("[github-sync] sync failed", error);
+                setSettingsSection("sync");
+              });
+          }}
+          onOpenSyncSettings={() => setSettingsSection("sync")}
         />
         <div className="app-panes" ref={panesContainerRef}>
           <div
@@ -1451,7 +1503,8 @@ const ExcalidrawWrapper = () => {
               activeId={workspace?.activePageId ?? null}
               onSelect={handleSelectPrimaryTab}
               onClose={handleClosePrimaryTab}
-              onNewTab={() => setNewPageDialogTarget("primary")}
+              onNewTab={() => setPagePaletteTarget("primary")}
+              newTabLabel="Open a page"
               onSplitTab={handleSplitPageToSecondary}
               trailing={
                 <button
@@ -1563,9 +1616,13 @@ const ExcalidrawWrapper = () => {
                   />
                 )}
 
-                {isSettingsOpen && (
+                {settingsSection && (
                   <SettingsDialog
-                    onClose={() => setIsSettingsOpen(false)}
+                    key={settingsSection}
+                    initialSection={settingsSection}
+                    githubSyncStatus={githubSyncStatus}
+                    onGithubSyncStatusChange={setGithubSyncStatus}
+                    onClose={() => setSettingsSection(null)}
                     workspaceDirectory={workspaceDirectory}
                     appTheme={appTheme}
                     onThemeChange={setAppTheme}
@@ -1673,6 +1730,22 @@ const ExcalidrawWrapper = () => {
                     ref={debugCanvasRef}
                   />
                 )}
+                {pagePaletteTarget && (
+                  <PagePalette
+                    workspace={workspace}
+                    targetLabel={
+                      pagePaletteTarget === "primary"
+                        ? "this pane"
+                        : "the split"
+                    }
+                    onClose={() => setPagePaletteTarget(null)}
+                    onOpenPage={handlePagePaletteOpen}
+                    onCreatePage={() => {
+                      setNewPageDialogTarget(pagePaletteTarget);
+                      setPagePaletteTarget(null);
+                    }}
+                  />
+                )}
                 {newPageDialogTarget && (
                   <NewPageDialog
                     workspace={workspace}
@@ -1706,7 +1779,7 @@ const ExcalidrawWrapper = () => {
                   onSelectTab={handleSelectSecondaryTab}
                   onCloseTab={handleCloseSecondaryTab}
                   onClosePane={handleCloseSecondaryPane}
-                  onNewTab={() => setNewPageDialogTarget("secondary")}
+                  onNewTab={() => setPagePaletteTarget("secondary")}
                 />
               </div>
             </>

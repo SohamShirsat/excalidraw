@@ -85,6 +85,39 @@
   }
 }
 
+// GitHub sync status/action button (see `SyncRailButton` in LeftDock.tsx)
+.left-dock-sync {
+  &.is-alert {
+    color: var(--color-danger, #d64545);
+  }
+
+  &.is-syncing svg {
+    animation: left-dock-sync-spin 1.4s linear infinite;
+  }
+}
+
+.left-dock-sync-dot {
+  position: absolute;
+  right: 0.35rem;
+  top: 0.35rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@keyframes left-dock-sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .left-dock-sync.is-syncing svg {
+    animation: none;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Panel
 // -----------------------------------------------------------------------------

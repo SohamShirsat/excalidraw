@@ -544,10 +544,20 @@ export const SHORTCUT_DEFINITIONS: readonly ShortcutDefinition[] = [
     defaultBinding: { key: "p", code: "KeyP", metaKey: true },
   },
   {
-    id: "workspace.newPage",
-    label: "New page",
+    // "New tab" opens a page picker, not an empty canvas — the same thing
+    // Cmd+T does in Figma and in a browser. Creating a page is the separate
+    // `workspace.newPage` action below, because it has to ask which folder
+    // and file the page belongs in.
+    id: "workspace.openPagePalette",
+    label: "Open a page",
     category: "Workspace",
     defaultBinding: { key: "t", code: "KeyT", metaKey: true },
+  },
+  {
+    id: "workspace.newPage",
+    label: "New page…",
+    category: "Workspace",
+    defaultBinding: { key: "n", code: "KeyN", metaKey: true },
   },
   {
     id: "workspace.nextTab",

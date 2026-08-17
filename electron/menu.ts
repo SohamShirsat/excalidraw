@@ -89,8 +89,15 @@ export const buildApplicationMenu = (mainWindow: BrowserWindow): Menu => {
         {
           // Bare "t"/"T" is already the text-tool shortcut
           // (`SHORTCUT_DEFINITIONS`'s `tool.text`); CmdOrCtrl+T is free.
-          label: "New Page…",
+          // Opens the page picker (search over existing pages), matching
+          // what a new tab does in Figma — creating one is the item below.
+          label: "Open Page…",
           accelerator: "CmdOrCtrl+T",
+          click: () => sendMenuAction(mainWindow, "open-page-palette"),
+        },
+        {
+          label: "New Page…",
+          accelerator: "CmdOrCtrl+N",
           click: () => sendMenuAction(mainWindow, "open-new-page"),
         },
         {

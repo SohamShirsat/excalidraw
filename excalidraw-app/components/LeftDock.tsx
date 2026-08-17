@@ -4,6 +4,7 @@ import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
 import "./LeftDock.scss";
 
+import type { GithubSyncStatus } from "../data/githubSyncTypes";
 import type { WorkspaceController } from "./WorkspaceSidebar";
 
 const ACTIVE_TAB_STORAGE_KEY = "personal-excalidraw-left-dock-tab";
@@ -92,6 +93,25 @@ const SettingsIcon = () => (
       d="M8.6 2.9a1 1 0 0 1 1-.83h.8a1 1 0 0 1 1 .83l.14.9a6 6 0 0 1 1.3.75l.85-.34a1 1 0 0 1 1.23.42l.4.7a1 1 0 0 1-.22 1.27l-.7.58a6 6 0 0 1 0 1.5l.7.58a1 1 0 0 1 .22 1.27l-.4.7a1 1 0 0 1-1.23.42l-.85-.34a6 6 0 0 1-1.3.75l-.14.9a1 1 0 0 1-1 .83h-.8a1 1 0 0 1-1-.83l-.14-.9a6 6 0 0 1-1.3-.75l-.85.34a1 1 0 0 1-1.23-.42l-.4-.7a1 1 0 0 1 .22-1.27l.7-.58a6 6 0 0 1 0-1.5l-.7-.58a1 1 0 0 1-.22-1.27l.4-.7a1 1 0 0 1 1.23-.42l.85.34a6 6 0 0 1 1.3-.75l.14-.9Z"
       stroke="currentColor"
       strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const SyncIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true" fill="none">
+    <path
+      d="M3.5 8.5a6.5 6.5 0 0 1 11-3.2m1.9 3.2-1.9-3.2-3.2 1.2"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M16.5 11.5a6.5 6.5 0 0 1-11 3.2m-1.9-3.2 1.9 3.2 3.2-1.2"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
       strokeLinejoin="round"
     />
   </svg>
@@ -222,12 +242,75 @@ export const useLeftDockState = (): LeftDockState => {
  * actual content is portaled in from inside the `<Excalidraw>` tree — see
  * `InspectorPanel.tsx`'s `LibraryDockPanel` — since it needs editor contexts.
  */
+/**
+ * The rail's GitHub-sync affordance: a single button that both *reports*
+ * (has anything not been backed up?) and *acts* (click to push now).
+ *
+ * It only ever offers the safe action. Anything needing a decision —
+ * first-time setup, an auth failure, a conflict — routes to Settings → Sync
+ * rather than doing something irreversible from a one-click rail button.
+ */
+const SyncRailButton = ({
+  status,
+  onSyncNow,
+  onOpenSyncSettings,
+}: {
+  status: GithubSyncStatus;
+  onSyncNow: () => void;
+  onOpenSyncSettings: () => void;
+}) => {
+  if (!status.isSupported) {
+    return null;
+  }
+
+  const needsAttention =
+    status.state === "error" || status.state === "conflict";
+  const isSyncing = status.state === "syncing";
+  const hasPending = status.pendingChanges > 0;
+
+  const label =
+    status.state === "disconnected"
+      ? "Set up GitHub sync"
+      : isSyncing
+      ? "Syncing with GitHub…"
+      : needsAttention
+      ? "GitHub sync needs your attention"
+      : hasPending
+      ? `Sync ${status.pendingChanges} ${
+          status.pendingChanges === 1 ? "change" : "changes"
+        } to GitHub`
+      : "Everything is backed up to GitHub";
+
+  const routesToSettings =
+    status.state === "disconnected" || needsAttention || isSyncing;
+
+  return (
+    <button
+      type="button"
+      className={`left-dock-rail-button left-dock-sync${
+        needsAttention ? " is-alert" : ""
+      }${isSyncing ? " is-syncing" : ""}`}
+      aria-label={label}
+      title={label}
+      onClick={routesToSettings ? onOpenSyncSettings : onSyncNow}
+    >
+      <SyncIcon />
+      {(hasPending || needsAttention) && !isSyncing && (
+        <span className="left-dock-sync-dot" aria-hidden="true" />
+      )}
+    </button>
+  );
+};
+
 export const LeftDock = ({
   state,
   workspaceController,
   onOpenSettings,
   onLibraryHostChange,
   onSearchHostChange,
+  githubSyncStatus,
+  onSyncNow,
+  onOpenSyncSettings,
 }: {
   state: LeftDockState;
   workspaceController: WorkspaceController;
@@ -235,6 +318,9 @@ export const LeftDock = ({
   /** Portal targets — see `DockPortals.tsx` for why these two tabs differ. */
   onLibraryHostChange: (node: HTMLDivElement | null) => void;
   onSearchHostChange: (node: HTMLDivElement | null) => void;
+  githubSyncStatus: GithubSyncStatus;
+  onSyncNow: () => void;
+  onOpenSyncSettings: () => void;
 }) => {
   const { activeTab, isCollapsed, width, setWidth, selectTab } = state;
 
@@ -295,6 +381,11 @@ export const LeftDock = ({
           })}
         </div>
         <div className="left-dock-rail-group">
+          <SyncRailButton
+            status={githubSyncStatus}
+            onSyncNow={onSyncNow}
+            onOpenSyncSettings={onOpenSyncSettings}
+          />
           <button
             type="button"
             className="left-dock-rail-button"

@@ -10,17 +10,21 @@ import {
   shortcutBindingsEqual,
 } from "../data/shortcutBindings";
 
+import { GithubSyncSettings } from "./GithubSyncSettings";
+
 import "./SettingsDialog.scss";
 
+import type { GithubSyncStatus } from "../data/githubSyncTypes";
 import type {
   ShortcutBinding,
   ShortcutDefinition,
 } from "../data/shortcutBindings";
 
-type SettingsSection = "general" | "shortcuts" | "about";
+type SettingsSection = "general" | "sync" | "shortcuts" | "about";
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: "general", label: "General" },
+  { id: "sync", label: "Sync" },
   { id: "shortcuts", label: "Shortcuts" },
   { id: "about", label: "About" },
 ];
@@ -144,6 +148,9 @@ export const SettingsDialog = ({
   appVersion,
   overrides,
   onSaveOverrides,
+  githubSyncStatus,
+  onGithubSyncStatusChange,
+  initialSection = "general",
 }: {
   onClose: () => void;
   workspaceDirectory: string | null;
@@ -154,8 +161,12 @@ export const SettingsDialog = ({
   onSaveOverrides: (
     next: Record<string, ShortcutBinding | null>,
   ) => Promise<void>;
+  githubSyncStatus: GithubSyncStatus;
+  onGithubSyncStatusChange: (status: GithubSyncStatus) => void;
+  /** Lets the sync badge in the rail open straight into Settings → Sync. */
+  initialSection?: SettingsSection;
 }) => {
-  const [section, setSection] = useState<SettingsSection>("general");
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const [capturingId, setCapturingId] = useState<string | null>(null);
   const [shortcutError, setShortcutError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -281,6 +292,13 @@ export const SettingsDialog = ({
                 </div>
               </div>
             </>
+          )}
+
+          {section === "sync" && (
+            <GithubSyncSettings
+              status={githubSyncStatus}
+              onStatusChange={onGithubSyncStatusChange}
+            />
           )}
 
           {section === "shortcuts" && (
