@@ -18,9 +18,15 @@ import { createConfirmHandler } from "./dialogHandlers";
 import { createWorkspaceIpcHandlers } from "./ipcHandlers";
 import { WORKSPACE_IPC_CHANNELS } from "./ipcChannels";
 import { buildApplicationMenu } from "./menu";
+import {
+  getSettingsFilePath,
+  readShortcutOverrides,
+  writeShortcutOverrides,
+} from "./settingsStore";
 import { resolveWorkspaceRoot } from "./workspaceRoot";
 
 import type { ConfirmDialogOptions } from "./appIpcChannels";
+import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
 
 const APP_DISPLAY_NAME = "Personal Excalidraw";
 // Renamed early (before `app.whenReady()`) so `app.getName()`/the About
@@ -193,8 +199,28 @@ const registerAppIpcHandlers = () => {
     APP_IPC_CHANNELS.dialogConfirm,
     (_event, options: ConfirmDialogOptions) => confirmHandler(options),
   );
+
+  // Remappable-shortcut overrides — see `excalidraw-app/data/shortcutBindings.ts`
+  // for the canonical registry these overrides get merged onto, and
+  // `electron/settingsStore.ts` for the settings.json read/write logic
+  // itself (kept as plain, path-parameterized functions there for
+  // testability; resolved to a real path only here).
+  const settingsPath = getSettingsFilePath(app.getPath("userData"));
+  ipcMain.handle(APP_IPC_CHANNELS.settingsShortcutsRead, () =>
+    readShortcutOverrides(settingsPath),
+  );
+  ipcMain.handle(
+    APP_IPC_CHANNELS.settingsShortcutsWrite,
+    (_event, overrides: Record<string, ShortcutBinding | null>) =>
+      writeShortcutOverrides(settingsPath, overrides),
+  );
+
   console.info(
-    `[electron/main] app IPC handlers registered: ${APP_IPC_CHANNELS.dialogConfirm}`,
+    `[electron/main] app IPC handlers registered: ${[
+      APP_IPC_CHANNELS.dialogConfirm,
+      APP_IPC_CHANNELS.settingsShortcutsRead,
+      APP_IPC_CHANNELS.settingsShortcutsWrite,
+    ].join(", ")}`,
   );
 };
 

@@ -12,6 +12,7 @@
  * isn't a single shared compiled type to import across that boundary.
  */
 
+import type { ShortcutBinding } from "./data/shortcutBindings";
 import type { WorkspaceMetadata } from "./data/workspaceTypes";
 
 export interface ElectronWorkspaceBridge {
@@ -70,6 +71,10 @@ export interface ElectronAppBridge {
   ) => () => void;
   onMenuAction: (callback: (actionId: MenuActionId) => void) => () => void;
   confirm: (options: ConfirmDialogOptions) => Promise<boolean>;
+  readShortcutOverrides: () => Promise<Record<string, ShortcutBinding | null>>;
+  writeShortcutOverrides: (
+    overrides: Record<string, ShortcutBinding | null>,
+  ) => Promise<void>;
 }
 
 declare global {

@@ -12,6 +12,8 @@ export const APP_IPC_CHANNELS = {
   menuSyntheticKeydown: "menu:synthetic-keydown",
   menuAction: "menu:action",
   dialogConfirm: "dialog:confirm",
+  settingsShortcutsRead: "settings:shortcuts:read",
+  settingsShortcutsWrite: "settings:shortcuts:write",
 } as const;
 
 export type AppIpcChannel =

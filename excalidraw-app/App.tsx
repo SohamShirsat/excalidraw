@@ -79,7 +79,10 @@ import {
   localStorageQuotaExceededAtom,
 } from "./data/LocalData";
 import { RepositoryLibraryAdapter } from "./data/RepositoryLibraryData";
+import { getEffectiveBindings } from "./data/shortcutBindings";
+import { loadShortcutOverrides } from "./data/shortcutOverrides";
 import { isBrowserStorageStateNewer } from "./data/tabSync";
+import { installShortcutInterceptor } from "./shortcutInterception";
 import { useHandleAppTheme } from "./useHandleAppTheme";
 import { getPreferredLanguage } from "./app-language/language-detector";
 import { useAppLangCode } from "./app-language/language-state";
@@ -113,6 +116,7 @@ import type {
   WorkspaceItemType,
   WorkspaceMetadata,
 } from "./data/WorkspaceData";
+import type { ShortcutDefinition } from "./data/shortcutBindings";
 
 polyfill();
 
@@ -262,6 +266,40 @@ const ExcalidrawWrapper = () => {
       unsubscribeMenuAction?.();
     };
   }, [excalidrawAPI]);
+
+  // Remappable-shortcut interception (see `excalidraw-app/shortcutInterception.ts`
+  // and `excalidraw-app/data/shortcutBindings.ts`). No Settings/rebinding UI
+  // exists yet — this effect only makes ALREADY-PERSISTED overrides
+  // (however they got there) actually take effect. A ref keeps the DOM
+  // listener installed exactly once while always reading the LATEST
+  // bindings, so overrides loading in after mount don't require tearing
+  // down and reinstalling the capture-phase listener.
+  const shortcutBindingsRef = useRef<ShortcutDefinition[]>(
+    getEffectiveBindings({}),
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const uninstall = installShortcutInterceptor(
+      () => shortcutBindingsRef.current,
+    );
+
+    loadShortcutOverrides()
+      .then((overrides) => {
+        if (isMounted) {
+          shortcutBindingsRef.current = getEffectiveBindings(overrides);
+        }
+      })
+      .catch((error) => {
+        console.error("[shortcuts] failed to load overrides", error);
+      });
+
+    return () => {
+      isMounted = false;
+      uninstall();
+    };
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Hoisted loadImages

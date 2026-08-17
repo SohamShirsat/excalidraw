@@ -9,6 +9,7 @@ import type {
   MenuActionId,
   SyntheticKeydownPayload,
 } from "./appIpcChannels";
+import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
 
 /**
  * Exposed on `window.electronWorkspace` in the renderer (see
@@ -93,6 +94,22 @@ const electronAppBridge = {
    */
   confirm: (options: ConfirmDialogOptions): Promise<boolean> =>
     ipcRenderer.invoke(APP_IPC_CHANNELS.dialogConfirm, options),
+
+  /**
+   * Remappable-shortcut override persistence — reads/writes
+   * `userData/settings.json` via `electron/settingsStore.ts`, keyed by the
+   * `ShortcutDefinition.id`s in `excalidraw-app/data/shortcutBindings.ts`.
+   * Consumed by `excalidraw-app/data/shortcutOverrides.ts`'s Electron
+   * branch (its browser-dev fallback uses `localStorage` instead, when this
+   * bridge is undefined).
+   */
+  readShortcutOverrides: (): Promise<Record<string, ShortcutBinding | null>> =>
+    ipcRenderer.invoke(APP_IPC_CHANNELS.settingsShortcutsRead),
+
+  writeShortcutOverrides: (
+    overrides: Record<string, ShortcutBinding | null>,
+  ): Promise<void> =>
+    ipcRenderer.invoke(APP_IPC_CHANNELS.settingsShortcutsWrite, overrides),
 };
 
 contextBridge.exposeInMainWorld("electronApp", electronAppBridge);
