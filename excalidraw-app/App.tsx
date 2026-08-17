@@ -215,6 +215,54 @@ const ExcalidrawWrapper = () => {
     }
   }, [excalidrawAPI]);
 
+  // Bridges the native macOS application menu (`electron/menu.ts`) into the
+  // renderer. No-ops outside Electron, since `window.electronApp` is only
+  // ever defined there (see `excalidraw-app/electron.d.ts`).
+  useEffect(() => {
+    const unsubscribeSyntheticKeydown =
+      window.electronApp?.onMenuSyntheticKeydown((payload) => {
+        // Replays the exact same `KeyboardEvent` a real keypress would
+        // produce, dispatched on `document` — flows through the app's
+        // existing `handleKeyboardGlobally` keydown dispatch unchanged, no
+        // second action-triggering system.
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            ...payload,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+
+    const unsubscribeMenuAction = window.electronApp?.onMenuAction(
+      (actionId) => {
+        if (!excalidrawAPI) {
+          return;
+        }
+        switch (actionId) {
+          case "export-json":
+            // Mirrors `MainMenu.DefaultItems.Export`'s onSelect exactly.
+            excalidrawAPI.updateScene({
+              appState: { openDialog: { name: "jsonExport" } },
+            });
+            break;
+          case "change-canvas-background":
+            // Mirrors clicking the in-canvas hamburger menu — the real code
+            // path `MainMenu.DefaultItems.ChangeCanvasBackground` (an inline
+            // color picker, not a standalone toggle) lives behind
+            // (`packages/excalidraw/components/main-menu/MainMenu.tsx`).
+            excalidrawAPI.updateScene({ appState: { openMenu: "canvas" } });
+            break;
+        }
+      },
+    );
+
+    return () => {
+      unsubscribeSyntheticKeydown?.();
+      unsubscribeMenuAction?.();
+    };
+  }, [excalidrawAPI]);
+
   // ---------------------------------------------------------------------------
   // Hoisted loadImages
   // ---------------------------------------------------------------------------

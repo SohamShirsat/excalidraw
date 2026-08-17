@@ -1,12 +1,35 @@
 import path from "node:path";
 
-import { app, BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  net,
+  protocol,
+  Menu,
+} from "electron";
+import windowStateKeeper from "electron-window-state";
 
 import { PersonalWorkspaceStore } from "../excalidraw-app/scripts/PersonalWorkspaceServer";
 
+import { APP_IPC_CHANNELS } from "./appIpcChannels";
+import { createConfirmHandler } from "./dialogHandlers";
 import { createWorkspaceIpcHandlers } from "./ipcHandlers";
 import { WORKSPACE_IPC_CHANNELS } from "./ipcChannels";
+import { buildApplicationMenu } from "./menu";
 import { resolveWorkspaceRoot } from "./workspaceRoot";
+
+import type { ConfirmDialogOptions } from "./appIpcChannels";
+
+const APP_DISPLAY_NAME = "Personal Excalidraw";
+// Renamed early (before `app.whenReady()`) so `app.getName()`/the About
+// panel reflect it. Note this does NOT rename the running executable itself
+// — in dev mode the Dock/menu-bar title still reads "Electron" (a bundle
+// Info.plist property only a real packaged build controls); harmless, and
+// resolved automatically once `electron-builder`'s `productName` (already
+// set in `electron-builder.yml`) takes over for packaged builds.
+app.setName(APP_DISPLAY_NAME);
 
 // Fixed dev-server port (see `electron:dev` in package.json) — deliberately
 // distinct from `start` (3000), `start:personal` (3001), and `serve` (5001).
@@ -62,10 +85,25 @@ const registerAppProtocol = () => {
 };
 
 const createMainWindow = async () => {
+  // Persists window size/position across launches (multi-monitor-aware —
+  // e.g. won't restore a window off-screen if a monitor got disconnected).
+  // Its state file lives in `app.getPath("userData")` by default, which is
+  // fine to leave as-is.
+  const windowState = windowStateKeeper({
+    defaultWidth: 1400,
+    defaultHeight: 900,
+  });
+
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    x: windowState.x,
+    y: windowState.y,
+    width: windowState.width,
+    height: windowState.height,
     show: false,
+    // Placeholder only — a real multi-resolution macOS `.icns` is deferred
+    // to a later icon-polish pass. This just keeps dev mode from showing
+    // the generic Electron icon.
+    icon: path.join(app.getAppPath(), "public", "android-chrome-512x512.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -73,6 +111,11 @@ const createMainWindow = async () => {
       sandbox: true,
     },
   });
+
+  // Registers resize/move/close listeners and restores maximized/full-screen
+  // state; must be called after construction, per `electron-window-state`'s
+  // own contract.
+  windowState.manage(mainWindow);
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
@@ -130,6 +173,31 @@ const registerWorkspaceIpcHandlers = (store: PersonalWorkspaceStore) => {
   );
 };
 
+/**
+ * Registers the app-shell-level IPC surface (currently just the native
+ * confirm dialog — the menu's synthetic-keydown/action channels are
+ * one-directional `webContents.send` from `electron/menu.ts` and don't need
+ * an `ipcMain.handle`). References the module-level `mainWindow` directly
+ * (rather than capturing a parameter) so it always targets whichever window
+ * is currently open, including after a mac "activate" re-creates it.
+ */
+const registerAppIpcHandlers = () => {
+  const confirmHandler = createConfirmHandler((messageBoxOptions) => {
+    if (!mainWindow) {
+      return Promise.resolve({ response: 0 });
+    }
+    return dialog.showMessageBox(mainWindow, messageBoxOptions);
+  });
+
+  ipcMain.handle(
+    APP_IPC_CHANNELS.dialogConfirm,
+    (_event, options: ConfirmDialogOptions) => confirmHandler(options),
+  );
+  console.info(
+    `[electron/main] app IPC handlers registered: ${APP_IPC_CHANNELS.dialogConfirm}`,
+  );
+};
+
 const main = async () => {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
@@ -155,7 +223,14 @@ const main = async () => {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      void createMainWindow();
+      // Re-registers the menu too — its `click` handlers close over the
+      // specific `BrowserWindow` instance passed to `buildApplicationMenu`,
+      // which was just destroyed along with the last window.
+      void createMainWindow().then(() => {
+        if (mainWindow) {
+          Menu.setApplicationMenu(buildApplicationMenu(mainWindow));
+        }
+      });
     }
   });
 
@@ -167,12 +242,25 @@ const main = async () => {
 
     const store = new PersonalWorkspaceStore(workspaceRoot);
     registerWorkspaceIpcHandlers(store);
+    registerAppIpcHandlers();
 
     if (app.isPackaged) {
       registerAppProtocol();
     }
 
+    app.setAboutPanelOptions({
+      applicationName: APP_DISPLAY_NAME,
+      applicationVersion: app.getVersion(),
+      version: app.getVersion(),
+    });
+
     await createMainWindow();
+
+    if (mainWindow) {
+      Menu.setApplicationMenu(buildApplicationMenu(mainWindow));
+      console.info("[electron/main] application menu registered");
+    }
+
     console.info("[electron/main] window created and loaded");
   } catch (error) {
     console.error("[electron/main] fatal startup error", error);

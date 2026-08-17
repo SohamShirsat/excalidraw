@@ -430,15 +430,35 @@ export const WorkspaceSidebar = ({
     });
   };
 
-  const requestDelete = (type: WorkspaceItemType, id: string, name: string) => {
+  const requestDelete = async (
+    type: WorkspaceItemType,
+    id: string,
+    name: string,
+  ) => {
     const description =
       type === "folder"
         ? "This removes every file and page inside it."
         : type === "file"
         ? "This removes every page inside it."
         : "This removes the page and its drawing.";
+    const title = `Delete “${name}”?`;
 
-    if (window.confirm(`Delete “${name}”?\n\n${description}`)) {
+    // Same dual-transport pattern as `excalidraw-app/data/workspaceTransport.ts`:
+    // a native dialog inside Electron (`window.electronApp` is only ever
+    // defined there), falling back to the browser's `window.confirm` in
+    // browser-dev mode. Same warning copy as before, just reshaped from a
+    // single `confirm()` string into `{title, message, detail}`.
+    const confirmed = window.electronApp
+      ? await window.electronApp.confirm({
+          title,
+          message: title,
+          detail: description,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+        })
+      : window.confirm(`${title}\n\n${description}`);
+
+    if (confirmed) {
       void onDeleteItem(type, id);
     }
   };
@@ -620,7 +640,7 @@ export const WorkspaceSidebar = ({
                     label={`Delete folder ${folder.name}`}
                     onClick={(event) => {
                       event.stopPropagation();
-                      requestDelete("folder", folder.id, folder.name);
+                      void requestDelete("folder", folder.id, folder.name);
                     }}
                   >
                     <TrashIcon />
@@ -741,7 +761,11 @@ export const WorkspaceSidebar = ({
                                 label={`Delete file ${file.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  requestDelete("file", file.id, file.name);
+                                  void requestDelete(
+                                    "file",
+                                    file.id,
+                                    file.name,
+                                  );
                                 }}
                               >
                                 <TrashIcon />
@@ -865,7 +889,7 @@ export const WorkspaceSidebar = ({
                                         label={`Delete page ${page.name}`}
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          requestDelete(
+                                          void requestDelete(
                                             "page",
                                             page.id,
                                             page.name,

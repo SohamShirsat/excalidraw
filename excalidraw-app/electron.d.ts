@@ -31,8 +31,50 @@ export interface ElectronWorkspaceBridge {
   deletePageScenes: (pageIds: string[]) => Promise<void>;
 }
 
+/**
+ * Payload replayed as a real `KeyboardEvent` on `document` by
+ * `excalidraw-app/App.tsx` — see `electron/appIpcChannels.ts` for the
+ * canonical (main-process-side) definition this is kept in sync with by
+ * hand, for the same cross-TypeScript-program reason noted above.
+ */
+export interface SyntheticKeydownPayload {
+  key: string;
+  code: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+}
+
+/** Bespoke menu action ids with no existing keyboard shortcut to synthesize. */
+export type MenuActionId = "export-json" | "change-canvas-background";
+
+export interface ConfirmDialogOptions {
+  title: string;
+  message: string;
+  detail?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+}
+
+/**
+ * Ambient bridge type exposed by `electron/preload.ts` via
+ * `contextBridge.exposeInMainWorld("electronApp", ...)`. App-shell-level
+ * browser stuff (native menu dispatch, native dialogs) — deliberately kept
+ * separate from `ElectronWorkspaceBridge` above, which is scoped to
+ * Personal Workspace data only.
+ */
+export interface ElectronAppBridge {
+  onMenuSyntheticKeydown: (
+    callback: (payload: SyntheticKeydownPayload) => void,
+  ) => () => void;
+  onMenuAction: (callback: (actionId: MenuActionId) => void) => () => void;
+  confirm: (options: ConfirmDialogOptions) => Promise<boolean>;
+}
+
 declare global {
   interface Window {
     electronWorkspace?: ElectronWorkspaceBridge;
+    electronApp?: ElectronAppBridge;
   }
 }
