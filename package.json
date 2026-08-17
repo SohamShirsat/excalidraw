@@ -1,6 +1,9 @@
 {
   "private": true,
   "name": "excalidraw-monorepo",
+  "version": "1.0.0",
+  "description": "A local-first personal Excalidraw workspace for macOS.",
+  "author": "Soham Shirsat",
   "packageManager": "yarn@1.22.22",
   "workspaces": [
     "excalidraw-app",

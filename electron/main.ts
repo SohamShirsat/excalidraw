@@ -289,16 +289,19 @@ const main = async () => {
       return;
     }
     isQuitConfirmationOpen = true;
-    void dialog
-      .showMessageBox(mainWindow ?? undefined, {
-        type: "warning",
-        buttons: ["Keep app open", "Quit anyway"],
-        defaultId: 0,
-        cancelId: 0,
-        message: "Saving your workspace…",
-        detail:
-          "A drawing is still being saved locally. Keep the app open until it finishes, or quit now.",
-      })
+    const options = {
+      type: "warning" as const,
+      buttons: ["Keep app open", "Quit anyway"],
+      defaultId: 0,
+      cancelId: 0,
+      message: "Saving your workspace…",
+      detail:
+        "A drawing is still being saved locally. Keep the app open until it finishes, or quit now.",
+    };
+    const confirmation = mainWindow
+      ? dialog.showMessageBox(mainWindow, options)
+      : dialog.showMessageBox(options);
+    void confirmation
       .then(({ response }) => {
         isQuitConfirmationOpen = false;
         if (response === 1) {

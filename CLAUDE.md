@@ -18,6 +18,8 @@ This is a fork with a **local-first "Personal Workspace" feature** layered on to
 ```bash
 yarn start                # run the app (excalidraw.com behavior)
 yarn start:personal       # run the app with the Personal Workspace server enabled
+yarn electron:dev         # run the native macOS shell against the Vite renderer
+yarn electron:build       # create local macOS .app, .dmg, and .zip artifacts in release/
 yarn test:typecheck       # tsc, no emit
 yarn test:code            # eslint --max-warnings=0
 yarn test:other           # prettier --list-different
@@ -47,10 +49,13 @@ Always run `yarn test:update` before committing, and `yarn test:typecheck` to ve
 This fork adds a folder/file/page hierarchy and local persistence backed by the filesystem, distinct from upstream's browser-only/collab storage model:
 
 - **`personal-workspace/`** at repo root is the durable source of truth: `workspace.json` (folder/file/page metadata), `library.excalidrawlib` (personal library), `folders/` (mirrors the hierarchy on disk), and one `.excalidraw` JSON file per page. See `personal-workspace/README.md` for on-disk conventions — do not hand-edit these files while the app is running.
-- **`excalidraw-app/scripts/PersonalWorkspaceServer.ts`** is a Vite dev-server plugin exposing a REST-ish API under `/api/personal-workspace` (atomic writes via temp-file + rename) that reads/writes `personal-workspace/`. It's wired into `excalidraw-app/vite.config.mts` and only meaningful when running against a local Vite server (i.e. `yarn start:personal`), not in the production build.
-- **`excalidraw-app/data/WorkspaceData.ts`** defines the `WorkspaceMetadata`/`WorkspaceFolder`/`WorkspaceFile`/`WorkspacePage` types and the client-side store: an IndexedDB (`idb-keyval`) cache plus `repositoryRequest` calls to `PersonalWorkspaceServer`'s API. The IDB copy is a cache; the filesystem (via the dev server) is authoritative when available.
+- **`electron/main.ts`**, **`electron/preload.ts`**, and the typed bridge exposed in **`excalidraw-app/electron.d.ts`** are the primary native transport when the Electron app is running. Workspace reads/writes are serialized in the main process and target the folder provided through `ELECTRON_WORKSPACE_ROOT`; native file selection and app settings use the same bridge.
+- **`excalidraw-app/scripts/PersonalWorkspaceServer.ts`** remains the Vite fallback, exposing a REST-ish API under `/api/personal-workspace` (atomic writes via temp-file + rename) for `yarn start:personal` and browser development.
+- **`excalidraw-app/data/WorkspaceData.ts`** defines the `WorkspaceMetadata`/`WorkspaceFolder`/`WorkspaceFile`/`WorkspacePage` types and the client-side store: an IndexedDB (`idb-keyval`) cache plus transport calls to the Electron bridge or the Vite server. The IDB copy is a cache; the filesystem is authoritative when either local transport is available.
 - **`excalidraw-app/data/RepositoryLibraryData.ts`** and **`excalidraw-app/data/WorkspaceSearch.ts`** provide library sync and cross-page/cross-file search over the workspace.
-- **`excalidraw-app/components/WorkspaceSidebar.tsx`** and **`WorkspaceSearchSidebar.tsx`** are the UI surfaces (folder tree, search) registered into the app's `DefaultSidebar` alongside the existing library sidebar.
-- **`scripts/spotlight-app/`**, **`scripts/install-personal-excalidraw-spotlight-app.sh`**, **`scripts/launch-personal-excalidraw.sh`** package a macOS Spotlight-launchable app that starts the local dev server and opens the browser — unrelated to the web app's runtime code, only relevant when working on the desktop-launcher UX.
+- **`excalidraw-app/components/WorkspaceRail.tsx`** keeps the workspace folder tree visible on the left. **`WorkspaceSearchDialog.tsx`** supplies cross-workspace search via Command-P, while **`WorkspaceSearchSidebar.tsx`** remains reusable in the standard sidebar.
+- **`excalidraw-app/components/SettingsDialog.tsx`** contains the native app's General, Shortcuts, and About settings. Shortcut overrides persist locally and the app shell can open it through the native menu.
+- **`electron-builder.yml`** packages the local macOS app. Use `yarn electron:build`; it produces artifacts in `release/` and does not sign them with an Apple Developer ID.
+- **`scripts/spotlight-app/`**, **`scripts/install-personal-excalidraw-spotlight-app.sh`**, and **`scripts/launch-personal-excalidraw.sh`** are legacy browser-launcher tooling. Keep them isolated from the native runtime until their retirement is explicitly approved.
 
-When modifying workspace persistence, changes typically touch three layers together: the on-disk format (`personal-workspace/`, `PersonalWorkspaceServer.ts`), the client data layer (`WorkspaceData.ts`), and the UI (`WorkspaceSidebar.tsx`).
+When modifying workspace persistence, changes typically touch three layers together: the on-disk format and native/Vite transport (`electron/`, `PersonalWorkspaceServer.ts`), the client data layer (`WorkspaceData.ts`), and the workspace UI (`WorkspaceRail.tsx`).
