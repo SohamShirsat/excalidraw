@@ -355,24 +355,13 @@ export class PersonalWorkspaceStore {
       };
     }
 
-    const missingPageIds: string[] = [];
-    for (const page of workspace.pages) {
-      const expectedPath = getWorkspacePagePath(
-        this.workspaceRoot,
-        workspace,
-        page,
-      );
-      if (
-        !(await pathExists(expectedPath)) &&
-        !(await findPageScene(this.workspaceRoot, page.id))
-      ) {
-        missingPageIds.push(page.id);
-      }
-    }
-
     return {
       workspace,
-      missingPageIds,
+      // Startup needs only the metadata. Checking every page here can block
+      // the UI behind a slow local filesystem, especially for a large
+      // workspace. Page-path discovery and cache recovery remain on demand
+      // in `readPageScene()` and `syncMetadata()`.
+      missingPageIds: [] as string[],
       directory: "personal-workspace",
     };
   }

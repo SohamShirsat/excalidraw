@@ -201,7 +201,10 @@ describe("PersonalWorkspaceStore", () => {
     await store.deletePageScenes(["page-1"]);
 
     expect(await store.readPageScene("page-1")).toBeNull();
-    expect((await store.readStatus()).missingPageIds).toEqual(["page-1"]);
+    // Status is metadata-only so opening a large workspace never waits on a
+    // filesystem check for each page. Missing scenes are discovered on demand
+    // by `readPageScene()` instead.
+    expect((await store.readStatus()).missingPageIds).toEqual([]);
   });
 });
 

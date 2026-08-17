@@ -1,8 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-import { APP_IPC_CHANNELS } from "./appIpcChannels";
-import { WORKSPACE_IPC_CHANNELS } from "./ipcChannels";
-
 import type { IpcRendererEvent } from "electron";
 import type {
   ConfirmDialogOptions,
@@ -12,6 +9,30 @@ import type {
   SyntheticKeydownPayload,
 } from "./appIpcChannels";
 import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
+
+// Sandboxed Electron preloads may require Electron's built-in modules but not
+// sibling CommonJS modules. Keep these channel names local (and in sync with
+// `ipcChannels.ts`/`appIpcChannels.ts`) so the preload remains loadable with
+// `sandbox: true`; otherwise no bridge is exposed to the renderer.
+const WORKSPACE_IPC_CHANNELS = {
+  status: "workspace:status",
+  libraryRead: "workspace:library:read",
+  libraryWrite: "workspace:library:write",
+  metadataWrite: "workspace:metadata:write",
+  pagesRead: "workspace:pages:read",
+  pagesWrite: "workspace:pages:write",
+  pagesDelete: "workspace:pages:delete",
+} as const;
+
+const APP_IPC_CHANNELS = {
+  menuSyntheticKeydown: "menu:synthetic-keydown",
+  menuAction: "menu:action",
+  dialogConfirm: "dialog:confirm",
+  dialogOpenFiles: "dialog:open-files",
+  appVersion: "app:version",
+  settingsShortcutsRead: "settings:shortcuts:read",
+  settingsShortcutsWrite: "settings:shortcuts:write",
+} as const;
 
 /**
  * Exposed on `window.electronWorkspace` in the renderer (see

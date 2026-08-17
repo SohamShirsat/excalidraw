@@ -27,7 +27,6 @@
     "dotenv": "16.0.1",
     "electron": "43.4.0",
     "electron-builder": "26.15.3",
-    "electron-window-state": "5.0.3",
     "eslint-config-prettier": "8.5.0",
     "eslint-config-react-app": "7.0.1",
     "eslint-plugin-import": "2.31.0",
@@ -52,6 +51,9 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "electron-window-state": "5.0.3"
   },
   "homepage": ".",
   "main": "electron-dist/electron/main.js",

@@ -123,7 +123,7 @@ describe("electron/ipcHandlers", () => {
     expect(
       (await handlers[WORKSPACE_IPC_CHANNELS.status](FAKE_EVENT))
         .missingPageIds,
-    ).toEqual(["page-1"]);
+    ).toEqual([]);
   });
 
   it("serializes writes the same way the old HTTP middleware's operation queue did", async () => {
