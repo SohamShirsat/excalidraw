@@ -43,7 +43,6 @@ import { SAVE_TO_LOCAL_STORAGE_TIMEOUT, STORAGE_KEYS } from "../app_constants";
 
 import { FileManager } from "./FileManager";
 import { FileStatusStore } from "./fileStatusStore";
-import { Locker } from "./Locker";
 import { updateBrowserStateVersion } from "./tabSync";
 
 const filesStore = createStore("files-db", "files-store");
@@ -112,8 +111,6 @@ const isQuotaExceededError = (error: any) => {
   return error instanceof DOMException && error.name === "QuotaExceededError";
 };
 
-type SavingLockTypes = "collaboration";
-
 export class LocalData {
   private static _save = debounce(
     async (
@@ -150,18 +147,8 @@ export class LocalData {
     this._save.flush();
   };
 
-  private static locker = new Locker<SavingLockTypes>();
-
-  static pauseSave = (lockType: SavingLockTypes) => {
-    this.locker.lock(lockType);
-  };
-
-  static resumeSave = (lockType: SavingLockTypes) => {
-    this.locker.unlock(lockType);
-  };
-
   static isSavePaused = () => {
-    return document.hidden || this.locker.isLocked();
+    return document.hidden;
   };
 
   // ---------------------------------------------------------------------------
