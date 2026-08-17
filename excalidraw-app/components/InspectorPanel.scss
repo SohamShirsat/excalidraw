@@ -1,0 +1,282 @@
+// Right-hand design inspector. Portaled here from inside the `<Excalidraw>`
+// tree (see InspectorPanel.tsx) but laid out as a real column.
+
+.app-inspector-host {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.inspector-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  background: var(--chrome-panel-bg);
+  border-left: 1px solid var(--chrome-border);
+  z-index: 5;
+}
+
+.inspector-resize {
+  left: -3px;
+}
+
+.inspector-header {
+  gap: 0.375rem;
+
+  .inspector-selection-badge {
+    margin-inline-start: auto;
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--chrome-text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.inspector-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.25rem 0 1.5rem;
+  overscroll-behavior: contain;
+
+  // quiet scrollbar — the panel is narrow, a fat bar eats real estate
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--chrome-border-strong);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.inspector-section {
+  padding: 0.625rem 0.75rem;
+
+  & + .inspector-section {
+    border-top: 1px solid var(--chrome-border);
+  }
+}
+
+.inspector-section-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--chrome-text-faint);
+}
+
+// -----------------------------------------------------------------------------
+// Shape actions
+//
+// `SelectedShapeActions` was authored for a ~202px floating island. Docked in a
+// resizable column it needs its fieldsets to breathe and its legends to read as
+// section headers rather than tiny island captions.
+// -----------------------------------------------------------------------------
+
+.inspector-section--shape {
+  padding: 0;
+
+  .selected-shape-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+
+    > div,
+    > fieldset {
+      margin: 0;
+      padding: 0.625rem 0.75rem;
+    }
+
+    > div + div,
+    > div + fieldset,
+    > fieldset + fieldset,
+    > fieldset + div {
+      border-top: 1px solid var(--chrome-border);
+    }
+
+    fieldset {
+      border: none;
+
+      legend {
+        display: block;
+        float: none;
+        width: auto;
+        margin: 0 0 0.4rem;
+        padding: 0;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--chrome-text-faint);
+      }
+    }
+
+    .buttonList {
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+  }
+
+  // Stroke and background are the only two rows upstream ships without a
+  // visible label — in a floating island the two swatch rows are unambiguous,
+  // but in a full inspector every other group is titled, so unlabelled rows
+  // read as an omission. Matched on the picker's own `data-openpopup` rather
+  // than child position, because which rows render depends on what's selected.
+  .selected-shape-actions > div:has([data-openpopup="elementStroke"])::before {
+    content: "Stroke";
+  }
+
+  .selected-shape-actions
+    > div:has([data-openpopup="elementBackground"])::before {
+    content: "Background";
+  }
+
+  .selected-shape-actions > div:has([data-openpopup])::before {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--chrome-text-faint);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Canvas properties (no-selection state)
+// -----------------------------------------------------------------------------
+
+.inspector-canvas-background {
+  .color-picker__top-picks {
+    justify-content: flex-start;
+    gap: 0.375rem;
+  }
+
+  // the picker ships its own label; the section heading already says "Canvas"
+  legend {
+    display: none;
+  }
+}
+
+.inspector-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.875rem;
+  padding: 0.1875rem 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.inspector-toggle-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--chrome-text);
+}
+
+.inspector-toggle-hint {
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--chrome-text-faint);
+}
+
+.inspector-switch {
+  flex: 0 0 auto;
+  position: relative;
+  width: 1.875rem;
+  height: 1.0625rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--chrome-border-strong);
+  cursor: pointer;
+  transition: background 140ms ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--chrome-accent);
+    outline-offset: 2px;
+  }
+
+  &.is-on {
+    background: var(--chrome-accent);
+  }
+}
+
+.inspector-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.8125rem;
+  height: 0.8125rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  .inspector-switch.is-on & {
+    transform: translateX(0.8125rem);
+  }
+}
+
+.inspector-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--chrome-border-strong);
+  border-radius: var(--chrome-radius-sm);
+  background: transparent;
+  color: var(--chrome-text);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: var(--chrome-hover);
+    border-color: var(--chrome-accent);
+  }
+}
+
+.inspector-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+
+  > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  dt {
+    font-size: 0.8125rem;
+    color: var(--chrome-text-muted);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--chrome-text);
+  }
+}

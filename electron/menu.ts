@@ -87,6 +87,13 @@ export const buildApplicationMenu = (mainWindow: BrowserWindow): Menu => {
           click: () => sendMenuAction(mainWindow, "open-workspace-search"),
         },
         {
+          // Bare "t"/"T" is already the text-tool shortcut
+          // (`SHORTCUT_DEFINITIONS`'s `tool.text`); CmdOrCtrl+T is free.
+          label: "New Page…",
+          accelerator: "CmdOrCtrl+T",
+          click: () => sendMenuAction(mainWindow, "open-new-page"),
+        },
+        {
           // Mirrors `MainMenu.DefaultItems.SaveToActiveFile` (shortcutMap.saveScene).
           label: "Save",
           accelerator: "CmdOrCtrl+S",
@@ -148,6 +155,65 @@ export const buildApplicationMenu = (mainWindow: BrowserWindow): Menu => {
             sendSyntheticKeydown(
               mainWindow,
               MENU_SYNTHETIC_KEYDOWN_PAYLOADS.searchMenu,
+            ),
+        },
+        { type: "separator" },
+        // Workspace chrome. Handled by `excalidraw-app/App.tsx`'s own
+        // capture-phase listeners via the same synthetic-keydown replay as
+        // everything else here, so the menu and the keyboard can't drift.
+        {
+          label: "Toggle Sidebar",
+          accelerator: "CmdOrCtrl+\\",
+          click: () =>
+            sendSyntheticKeydown(
+              mainWindow,
+              MENU_SYNTHETIC_KEYDOWN_PAYLOADS.toggleLeftDock,
+            ),
+        },
+        {
+          label: "Toggle Design Panel",
+          accelerator: "CmdOrCtrl+Alt+\\",
+          click: () =>
+            sendSyntheticKeydown(
+              mainWindow,
+              MENU_SYNTHETIC_KEYDOWN_PAYLOADS.toggleInspector,
+            ),
+        },
+        { type: "separator" },
+        {
+          label: "Next Page Tab",
+          accelerator: "CmdOrCtrl+Alt+Right",
+          click: () =>
+            sendSyntheticKeydown(
+              mainWindow,
+              MENU_SYNTHETIC_KEYDOWN_PAYLOADS.nextTab,
+            ),
+        },
+        {
+          label: "Previous Page Tab",
+          accelerator: "CmdOrCtrl+Alt+Left",
+          click: () =>
+            sendSyntheticKeydown(
+              mainWindow,
+              MENU_SYNTHETIC_KEYDOWN_PAYLOADS.previousTab,
+            ),
+        },
+        {
+          label: "Open Page to the Side",
+          accelerator: "CmdOrCtrl+Shift+\\",
+          click: () =>
+            sendSyntheticKeydown(
+              mainWindow,
+              MENU_SYNTHETIC_KEYDOWN_PAYLOADS.splitView,
+            ),
+        },
+        {
+          label: "Close Page Tab",
+          accelerator: "CmdOrCtrl+Shift+W",
+          click: () =>
+            sendSyntheticKeydown(
+              mainWindow,
+              MENU_SYNTHETIC_KEYDOWN_PAYLOADS.closeTab,
             ),
         },
         { type: "separator" },

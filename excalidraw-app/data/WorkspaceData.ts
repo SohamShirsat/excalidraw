@@ -369,30 +369,49 @@ type ScheduledSceneSave = {
   onComplete?: (error: Error | null) => void;
 };
 
+type ScheduledSceneSaver = ((payload: ScheduledSceneSave) => void) & {
+  flush: () => void;
+  cancel: () => void;
+};
+
 export class WorkspaceData {
   private static _savedSceneJSON = new Map<string, string>();
   private static _pendingSceneJSON = new Map<string, string>();
 
-  private static _saveScene = debounce(
-    async ({ pageId, scene, onComplete }: ScheduledSceneSave) => {
-      try {
-        await WorkspaceData.savePageSceneJSON(pageId, scene);
-        onComplete?.(null);
-      } catch (error: any) {
-        console.error(error);
-        onComplete?.(
-          error instanceof Error
-            ? error
-            : new Error("Unable to save the workspace page."),
-        );
-      } finally {
-        if (WorkspaceData._pendingSceneJSON.get(pageId) === scene) {
-          WorkspaceData._pendingSceneJSON.delete(pageId);
-        }
-      }
-    },
-    450,
-  );
+  // One debounced saver per page, not a single shared one. Split view (and
+  // any future multi-pane editing) can produce onChange bursts for two
+  // *different* pages within the same 450ms window; a single shared
+  // debounce would keep resetting its one timer to the latest call's
+  // args, silently dropping the other page's save entirely.
+  private static _saveSceneByPage = new Map<string, ScheduledSceneSaver>();
+
+  private static _getSaveScene(pageId: string) {
+    let saveScene = WorkspaceData._saveSceneByPage.get(pageId);
+    if (!saveScene) {
+      saveScene = debounce(
+        async ({ scene, onComplete }: ScheduledSceneSave) => {
+          try {
+            await WorkspaceData.savePageSceneJSON(pageId, scene);
+            onComplete?.(null);
+          } catch (error: any) {
+            console.error(error);
+            onComplete?.(
+              error instanceof Error
+                ? error
+                : new Error("Unable to save the workspace page."),
+            );
+          } finally {
+            if (WorkspaceData._pendingSceneJSON.get(pageId) === scene) {
+              WorkspaceData._pendingSceneJSON.delete(pageId);
+            }
+          }
+        },
+        450,
+      );
+      WorkspaceData._saveSceneByPage.set(pageId, saveScene);
+    }
+    return saveScene;
+  }
 
   static async loadOrCreate(initialFileName?: string) {
     const repositoryStatus = await WorkspaceTransport.getWorkspaceStatus();
@@ -478,16 +497,20 @@ export class WorkspaceData {
     }
 
     WorkspaceData._pendingSceneJSON.set(payload.pageId, payload.scene);
-    WorkspaceData._saveScene(payload);
+    WorkspaceData._getSaveScene(payload.pageId)(payload);
     return true;
   }
 
   static flushScheduledPageSave() {
-    WorkspaceData._saveScene.flush();
+    for (const saveScene of WorkspaceData._saveSceneByPage.values()) {
+      saveScene.flush();
+    }
   }
 
   static cancelScheduledPageSave() {
-    WorkspaceData._saveScene.cancel();
+    for (const saveScene of WorkspaceData._saveSceneByPage.values()) {
+      saveScene.cancel();
+    }
     WorkspaceData._pendingSceneJSON.clear();
   }
 
@@ -499,6 +522,8 @@ export class WorkspaceData {
     pageIds.forEach((pageId) => {
       WorkspaceData._savedSceneJSON.delete(pageId);
       WorkspaceData._pendingSceneJSON.delete(pageId);
+      WorkspaceData._saveSceneByPage.get(pageId)?.cancel();
+      WorkspaceData._saveSceneByPage.delete(pageId);
     });
   }
 }

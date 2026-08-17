@@ -487,6 +487,112 @@ export const SHORTCUT_DEFINITIONS: readonly ShortcutDefinition[] = [
     category: "File",
     defaultBinding: { key: "Delete", code: "Delete", metaKey: true },
   },
+
+  // ---------------------------------------------------------------------
+  // Workspace — this fork's own desktop chrome (left dock, design
+  // inspector, page tabs). Unlike every entry above, these have no upstream
+  // `keyTest` to cite: their dispatch lives in `excalidraw-app/App.tsx`'s
+  // own capture-phase listeners. They're registered here anyway so the
+  // Settings > Shortcuts surface can rebind them through the exact same
+  // `getEffectiveBindings` / `installShortcutInterceptor` path as the
+  // editor's built-ins — the interceptor replays the *default* chord, which
+  // those listeners are keyed on, so remapping works with no extra wiring.
+  //
+  // Chords were chosen to avoid every binding already in this file, and to
+  // stay clear of macOS/Electron system accelerators (notably Cmd+W, which
+  // the native Window menu owns, and Cmd+M/Cmd+H).
+  // ---------------------------------------------------------------------
+  {
+    id: "workspace.toggleLeftDock",
+    label: "Toggle sidebar",
+    category: "Workspace",
+    defaultBinding: { key: "\\", code: "Backslash", metaKey: true },
+  },
+  {
+    id: "workspace.toggleInspector",
+    label: "Toggle design panel",
+    category: "Workspace",
+    defaultBinding: {
+      key: "\\",
+      code: "Backslash",
+      metaKey: true,
+      altKey: true,
+    },
+  },
+  {
+    id: "workspace.showPages",
+    label: "Show pages panel",
+    category: "Workspace",
+    defaultBinding: { key: "1", code: "Digit1", metaKey: true },
+  },
+  {
+    id: "workspace.showLibrary",
+    label: "Show library panel",
+    category: "Workspace",
+    defaultBinding: { key: "2", code: "Digit2", metaKey: true },
+  },
+  {
+    id: "workspace.showSearch",
+    label: "Show search panel",
+    category: "Workspace",
+    defaultBinding: { key: "3", code: "Digit3", metaKey: true },
+  },
+  {
+    id: "workspace.openSearch",
+    label: "Search the workspace",
+    category: "Workspace",
+    defaultBinding: { key: "p", code: "KeyP", metaKey: true },
+  },
+  {
+    id: "workspace.newPage",
+    label: "New page",
+    category: "Workspace",
+    defaultBinding: { key: "t", code: "KeyT", metaKey: true },
+  },
+  {
+    id: "workspace.nextTab",
+    label: "Next page tab",
+    category: "Workspace",
+    defaultBinding: {
+      key: "ArrowRight",
+      code: "ArrowRight",
+      metaKey: true,
+      altKey: true,
+    },
+  },
+  {
+    id: "workspace.previousTab",
+    label: "Previous page tab",
+    category: "Workspace",
+    defaultBinding: {
+      key: "ArrowLeft",
+      code: "ArrowLeft",
+      metaKey: true,
+      altKey: true,
+    },
+  },
+  {
+    id: "workspace.closeTab",
+    label: "Close page tab",
+    category: "Workspace",
+    defaultBinding: {
+      key: "w",
+      code: "KeyW",
+      metaKey: true,
+      shiftKey: true,
+    },
+  },
+  {
+    id: "workspace.splitView",
+    label: "Open current page to the side",
+    category: "Workspace",
+    defaultBinding: {
+      key: "\\",
+      code: "Backslash",
+      metaKey: true,
+      shiftKey: true,
+    },
+  },
 ];
 
 /**

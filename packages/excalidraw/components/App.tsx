@@ -508,7 +508,12 @@ const editorInterfaceContextInitialValue: EditorInterface = {
   canFitSidebar: false,
   isLandscape: true,
 };
-const EditorInterfaceContext = React.createContext<EditorInterface>(
+/**
+ * Exported so a host app can override the derived interface for a subtree —
+ * e.g. a styles panel docked outside the canvas, which should keep rendering
+ * at full size no matter how narrow the canvas container itself gets.
+ */
+export const EditorInterfaceContext = React.createContext<EditorInterface>(
   editorInterfaceContextInitialValue,
 );
 EditorInterfaceContext.displayName = "EditorInterfaceContext";

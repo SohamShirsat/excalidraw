@@ -1,0 +1,152 @@
+// Left navigation dock: fixed activity rail + resizable panel.
+// See AppLayout.scss for the shared chrome tokens these consume.
+
+.left-dock {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  background: var(--chrome-panel-bg);
+  border-right: 1px solid var(--chrome-border);
+  z-index: 5;
+}
+
+// -----------------------------------------------------------------------------
+// Activity rail — always visible, so navigation is never more than one click
+// away even with the panel collapsed.
+// -----------------------------------------------------------------------------
+
+.left-dock-rail {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  flex: 0 0 var(--dock-rail-width);
+  width: var(--dock-rail-width);
+  padding: 0.375rem 0;
+  background: var(--chrome-panel-bg-subtle);
+  border-right: 1px solid var(--chrome-border);
+}
+
+.left-dock-rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.left-dock-rail-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--chrome-radius);
+  background: transparent;
+  color: var(--chrome-text-faint);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+
+  svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  &:hover {
+    background: var(--chrome-hover);
+    color: var(--chrome-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--chrome-accent);
+    outline-offset: -2px;
+  }
+
+  &.is-active {
+    color: var(--chrome-accent);
+    background: var(--chrome-accent-soft);
+  }
+
+  // active indicator on the window edge, the way VS Code marks the open view
+  &.is-active::before {
+    content: "";
+    position: absolute;
+    left: -0.375rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 1.125rem;
+    border-radius: 1px;
+    background: var(--chrome-accent);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Panel
+// -----------------------------------------------------------------------------
+
+.left-dock-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.left-dock-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+
+  &[hidden] {
+    display: none;
+  }
+
+  // The workspace tree and search sidebar were both written as standalone
+  // sidebars with their own chrome. Inside the dock they're just content, so
+  // strip the duplicate framing and let the dock own the surface.
+  > .workspace-sidebar,
+  > .workspace-search-sidebar {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    overflow: hidden;
+  }
+}
+
+.left-dock-resize {
+  right: -3px;
+}
+
+// The library is portaled in from inside the `<Excalidraw>` tree. Its item grid
+// is a fixed `repeat(4, 1fr)` with its own horizontal padding, so adding any
+// padding of our own here pushes the fourth column past the panel edge — let
+// the library own its insets and just give it the height to scroll in.
+.left-dock-body--library {
+  .layer-ui__library {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Collapsed state — rail only.
+// -----------------------------------------------------------------------------
+
+.left-dock.is-collapsed {
+  .left-dock-rail {
+    border-right: none;
+  }
+}

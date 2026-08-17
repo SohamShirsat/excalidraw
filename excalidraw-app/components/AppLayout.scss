@@ -1,0 +1,232 @@
+// =============================================================================
+// Desktop app chrome — the Figma/FigJam-style three-column shell.
+//
+//   [ left dock ] [ tab strip + canvas panes ] [ design inspector ]
+//
+// Unlike upstream Excalidraw — where every UI surface floats *over* a
+// full-bleed canvas — the docks here are real flex columns. The canvas
+// genuinely shrinks, so nothing is ever hidden underneath a panel. That's the
+// single biggest perceptual difference between "a whiteboard in a browser tab"
+// and "a desktop design tool", and it's why this file owns the layout instead
+// of nudging the library's own absolute-positioned chrome around.
+// =============================================================================
+
+.excalidraw-app {
+  // The library sets `--ui-pointerEvents` on `.excalidraw-container` only.
+  // Excalidraw UI we portal *out* of that container (the inspector, the
+  // library panel) still references it, so give the shell a sane default.
+  --ui-pointerEvents: all;
+}
+
+.app-shell {
+  // -- neutral chrome palette -------------------------------------------------
+  // Deliberately NOT the library's `--color-surface-*` ramp: that one is
+  // violet-tinted to sit against a white canvas as floating islands. Docked
+  // full-height panels need a neutral grey or the whole window reads purple.
+  --chrome-bg: #f5f5f7;
+  --chrome-panel-bg: #ffffff;
+  --chrome-panel-bg-subtle: #fafafa;
+  --chrome-border: rgba(0, 0, 0, 0.09);
+  --chrome-border-strong: rgba(0, 0, 0, 0.14);
+  --chrome-text: #1b1b1f;
+  --chrome-text-muted: #6b6b76;
+  --chrome-text-faint: #93939e;
+  --chrome-hover: rgba(0, 0, 0, 0.045);
+  --chrome-active: rgba(0, 0, 0, 0.075);
+  --chrome-accent: #6965db;
+  --chrome-accent-soft: rgba(105, 101, 219, 0.12);
+  --chrome-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  // -- metrics ----------------------------------------------------------------
+  --dock-rail-width: 3rem;
+  --dock-panel-width: 16.5rem;
+  --inspector-width: 15.75rem;
+  --chrome-header-height: 2.5rem;
+  --chrome-radius: 0.4rem;
+  --chrome-radius-sm: 0.3rem;
+
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--chrome-bg);
+  color: var(--chrome-text);
+  font-family: var(--ui-font);
+}
+
+.theme--dark .app-shell {
+  --chrome-bg: #121214;
+  --chrome-panel-bg: #1c1c1f;
+  --chrome-panel-bg-subtle: #202024;
+  --chrome-border: rgba(255, 255, 255, 0.09);
+  --chrome-border-strong: rgba(255, 255, 255, 0.15);
+  --chrome-text: #e6e6ea;
+  --chrome-text-muted: #9a9aa4;
+  --chrome-text-faint: #6e6e78;
+  --chrome-hover: rgba(255, 255, 255, 0.06);
+  --chrome-active: rgba(255, 255, 255, 0.1);
+  --chrome-accent: #8a86ff;
+  --chrome-accent-soft: rgba(138, 134, 255, 0.16);
+  --chrome-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+// -----------------------------------------------------------------------------
+// Center column — tab strip + one or two canvas panes
+// -----------------------------------------------------------------------------
+
+.app-panes {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 12rem;
+  height: 100%;
+  overflow: hidden;
+  background: var(--chrome-bg);
+}
+
+.app-pane--secondary {
+  border-left: 1px solid var(--chrome-border);
+}
+
+// The canvas itself sits inset from the chrome with a hairline + radius, the
+// way a Figma/FigJam viewport reads as a distinct surface rather than bleeding
+// into the window edge.
+.app-pane-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  border-top: 1px solid var(--chrome-border);
+}
+
+.app-pane-divider {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 100%;
+  cursor: col-resize;
+  background: var(--chrome-border-strong);
+  position: relative;
+  z-index: 6;
+  transition: background 120ms ease;
+
+  // widened invisible hit area — a 1px visual seam with a 7px grab target
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    right: -3px;
+  }
+
+  &:hover,
+  &.is-dragging {
+    background: var(--chrome-accent);
+    box-shadow: 0 0 0 1px var(--chrome-accent);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Shared panel primitives (used by both docks)
+// -----------------------------------------------------------------------------
+
+.chrome-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  height: var(--chrome-header-height);
+  padding: 0 0.375rem 0 0.75rem;
+  border-bottom: 1px solid var(--chrome-border);
+  user-select: none;
+
+  h2,
+  .chrome-panel-title {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--chrome-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.chrome-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--chrome-radius-sm);
+  background: transparent;
+  color: var(--chrome-text-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  &:hover {
+    background: var(--chrome-hover);
+    color: var(--chrome-text);
+  }
+
+  &:active {
+    background: var(--chrome-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--chrome-accent);
+    outline-offset: -1px;
+  }
+
+  &.is-active {
+    background: var(--chrome-accent-soft);
+    color: var(--chrome-accent);
+  }
+}
+
+// A draggable edge for resizing a dock. Visually just the panel's own border
+// until hovered, so the chrome stays quiet at rest.
+.chrome-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  z-index: 8;
+  cursor: col-resize;
+  background: transparent;
+  border: none;
+  padding: 0;
+  transition: background 120ms ease;
+
+  &:hover,
+  &.is-dragging {
+    background: var(--chrome-accent);
+    opacity: 0.65;
+  }
+}

@@ -17,6 +17,7 @@ import {
   EVENT,
   debounce,
   isTestEnv,
+  isWritableElement,
   preventUnload,
   resolvablePromise,
   isDevEnv,
@@ -100,8 +101,15 @@ import "./index.scss";
 import { AppSidebar } from "./components/AppSidebar";
 import { QuickAccessActions } from "./components/QuickAccessActions";
 import { SettingsDialog } from "./components/SettingsDialog";
-import { WorkspaceRail } from "./components/WorkspaceRail";
+import { LeftDock, useLeftDockState } from "./components/LeftDock";
+import { InspectorPanel, useInspectorState } from "./components/InspectorPanel";
+import { LibraryDockPanel, SearchDockPanel } from "./components/DockPortals";
 import { WorkspaceSearchDialog } from "./components/WorkspaceSearchDialog";
+import { EditorTabBar } from "./components/EditorTabBar";
+import { NewPageDialog } from "./components/NewPageDialog";
+import { SecondaryPagePane } from "./components/SecondaryPagePane";
+import "./components/AppLayout.scss";
+import "./components/CanvasChrome.scss";
 import {
   WorkspaceData,
   addWorkspaceFile,
@@ -112,6 +120,8 @@ import {
   renameWorkspaceItem,
 } from "./data/WorkspaceData";
 
+import type { EditorTab } from "./components/EditorTabBar";
+import type { NewPageDialogSubmitInput } from "./components/NewPageDialog";
 import type {
   WorkspaceController,
   WorkspaceSaveStatus,
@@ -128,6 +138,8 @@ import type {
 polyfill();
 
 window.EXCALIDRAW_THROTTLE_RENDER = true;
+
+const PRIMARY_TABS_STORAGE_KEY = "personal-excalidraw-primary-tabs";
 
 let isSelfEmbedding = false;
 
@@ -199,6 +211,123 @@ const ExcalidrawWrapper = () => {
   const activeWorkspacePageIdRef = useRef<string | null>(null);
   const isWorkspaceSwitchingRef = useRef(false);
   const isWorkspaceAutosaveEnabledRef = useRef(false);
+
+  // ---------------------------------------------------------------------------
+  // Docked chrome (left navigation dock + right design inspector)
+  //
+  // Both panels are real flex columns of the shell, so the canvas genuinely
+  // shrinks rather than hiding underneath an overlay. Their *content*, though,
+  // needs Excalidraw's React contexts, so the components mount inside
+  // `<Excalidraw>` and portal their DOM into these host nodes. State lives up
+  // here so the keyboard shortcuts below, the native menu and the command
+  // palette all drive the same panels.
+  // ---------------------------------------------------------------------------
+
+  const leftDock = useLeftDockState();
+  const inspector = useInspectorState();
+  const [libraryHost, setLibraryHost] = useState<HTMLDivElement | null>(null);
+  const [searchHost, setSearchHost] = useState<HTMLDivElement | null>(null);
+  const [inspectorHost, setInspectorHost] = useState<HTMLElement | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Tabs (primary pane) + split view (optional secondary pane)
+  // ---------------------------------------------------------------------------
+
+  const [primaryTabs, setPrimaryTabs] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(PRIMARY_TABS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(PRIMARY_TABS_STORAGE_KEY, JSON.stringify(primaryTabs));
+  }, [primaryTabs]);
+
+  // Single source of truth stays `workspace.activePageId` (unchanged, still
+  // what gets persisted to workspace.json) — this just keeps an ordered tab
+  // strip in sync with it: append newly-activated pages, drop tabs whose
+  // page no longer exists (e.g. after a delete elsewhere).
+  useEffect(() => {
+    if (!workspace) {
+      return;
+    }
+    const validIds = new Set(workspace.pages.map((page) => page.id));
+    setPrimaryTabs((tabs) => {
+      let next = tabs.filter((id) => validIds.has(id));
+      if (workspace.activePageId && !next.includes(workspace.activePageId)) {
+        next = [...next, workspace.activePageId];
+      }
+      if (
+        next.length === tabs.length &&
+        next.every((id, index) => id === tabs[index])
+      ) {
+        return tabs;
+      }
+      return next;
+    });
+  }, [workspace]);
+
+  const [secondaryPane, setSecondaryPane] = useState<{
+    tabs: string[];
+    activePageId: string;
+  } | null>(null);
+
+  // Prunes the split pane the same way, and auto-closes it if its active
+  // page (or all of its tabs) got deleted out from under it.
+  useEffect(() => {
+    if (!workspace || !secondaryPane) {
+      return;
+    }
+    const validIds = new Set(workspace.pages.map((page) => page.id));
+    const nextTabs = secondaryPane.tabs.filter((id) => validIds.has(id));
+    if (nextTabs.length === 0) {
+      setSecondaryPane(null);
+      return;
+    }
+    const nextActivePageId = validIds.has(secondaryPane.activePageId)
+      ? secondaryPane.activePageId
+      : nextTabs[0];
+    if (
+      nextTabs.length !== secondaryPane.tabs.length ||
+      nextActivePageId !== secondaryPane.activePageId
+    ) {
+      setSecondaryPane({ tabs: nextTabs, activePageId: nextActivePageId });
+    }
+  }, [workspace, secondaryPane]);
+
+  const [splitPct, setSplitPct] = useState(50);
+  const isDraggingDividerRef = useRef(false);
+  const panesContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleDividerPointerDown = (event: React.PointerEvent) => {
+    event.preventDefault();
+    isDraggingDividerRef.current = true;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  };
+
+  const handleDividerPointerMove = (event: React.PointerEvent) => {
+    if (!isDraggingDividerRef.current || !panesContainerRef.current) {
+      return;
+    }
+    const rect = panesContainerRef.current.getBoundingClientRect();
+    const pct = ((event.clientX - rect.left) / rect.width) * 100;
+    setSplitPct(Math.min(75, Math.max(25, pct)));
+  };
+
+  const handleDividerPointerUp = (event: React.PointerEvent) => {
+    isDraggingDividerRef.current = false;
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+  };
+
+  const [newPageDialogTarget, setNewPageDialogTarget] = useState<
+    "primary" | "secondary" | null
+  >(null);
 
   const commitWorkspaceState = useCallback((next: WorkspaceMetadata) => {
     workspaceRef.current = next;
@@ -286,6 +415,9 @@ const ExcalidrawWrapper = () => {
           case "open-workspace-search":
             setIsWorkspaceSearchOpen(true);
             break;
+          case "open-new-page":
+            setNewPageDialogTarget("primary");
+            break;
           case "export-json":
             if (!excalidrawAPI) {
               return;
@@ -361,28 +493,6 @@ const ExcalidrawWrapper = () => {
     },
     [],
   );
-
-  // Cmd+P is reserved for workspace search because Cmd+K already opens the
-  // editor's hyperlink action. Keep this browser-mode listener as a fallback
-  // for `yarn start:personal`; Electron receives the same action from its
-  // native application menu.
-  useEffect(() => {
-    const openWorkspaceSearch = (event: KeyboardEvent) => {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.code === "KeyP"
-      ) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setIsWorkspaceSearchOpen(true);
-      }
-    };
-    document.addEventListener("keydown", openWorkspaceSearch, true);
-    return () =>
-      document.removeEventListener("keydown", openWorkspaceSearch, true);
-  }, []);
 
   // ---------------------------------------------------------------------------
   // Hoisted loadImages
@@ -965,6 +1075,251 @@ const ExcalidrawWrapper = () => {
     }
   };
 
+  const handleSelectPrimaryTab = (pageId: string) => {
+    void handleOpenWorkspacePage(pageId);
+  };
+
+  const handleClosePrimaryTab = (pageId: string) => {
+    const index = primaryTabs.indexOf(pageId);
+    if (index === -1 || primaryTabs.length <= 1) {
+      return;
+    }
+    setPrimaryTabs(primaryTabs.filter((id) => id !== pageId));
+    if (workspaceRef.current?.activePageId === pageId) {
+      const neighbor = primaryTabs[index - 1] ?? primaryTabs[index + 1];
+      if (neighbor) {
+        void handleOpenWorkspacePage(neighbor);
+      }
+    }
+  };
+
+  const handleSplitPageToSecondary = (pageId: string) => {
+    setSecondaryPane((current) => {
+      if (current) {
+        const tabs = current.tabs.includes(pageId)
+          ? current.tabs
+          : [...current.tabs, pageId];
+        return { tabs, activePageId: pageId };
+      }
+      return { tabs: [pageId], activePageId: pageId };
+    });
+  };
+
+  const handleSelectSecondaryTab = (pageId: string) => {
+    setSecondaryPane((current) =>
+      current ? { ...current, activePageId: pageId } : current,
+    );
+  };
+
+  const handleCloseSecondaryTab = (pageId: string) => {
+    setSecondaryPane((current) => {
+      if (!current) {
+        return current;
+      }
+      const next = current.tabs.filter((id) => id !== pageId);
+      if (next.length === 0) {
+        return null;
+      }
+      return {
+        tabs: next,
+        activePageId:
+          current.activePageId === pageId
+            ? next[next.length - 1]
+            : current.activePageId,
+      };
+    });
+  };
+
+  const handleCloseSecondaryPane = () => setSecondaryPane(null);
+
+  const handleCyclePrimaryTab = (direction: 1 | -1) => {
+    const activePageId = workspaceRef.current?.activePageId;
+    if (!activePageId || primaryTabs.length < 2) {
+      return;
+    }
+    const index = primaryTabs.indexOf(activePageId);
+    if (index === -1) {
+      return;
+    }
+    const next =
+      primaryTabs[
+        (index + direction + primaryTabs.length) % primaryTabs.length
+      ];
+    void handleOpenWorkspacePage(next);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Workspace shortcut layer
+  //
+  // These are the app's own chrome shortcuts (docks, page tabs, split view) —
+  // the things reached dozens of times a day. Each one is registered in
+  // `SHORTCUT_DEFINITIONS` under the "Workspace" category, so Settings >
+  // Shortcuts can rebind them: `installShortcutInterceptor` replays the
+  // *default* chord whenever a custom one is pressed, and this listener is
+  // keyed on those defaults, so remapping needs no extra wiring here.
+  //
+  // Capture phase, ahead of the editor's own bubble-phase handler, and skipped
+  // entirely while typing so none of them steal a keystroke from a rename
+  // field or the canvas text editor. In Electron the native menu fires the
+  // same actions; this listener is what makes them work under
+  // `yarn start:personal` too.
+  // ---------------------------------------------------------------------------
+  const workspaceShortcutHandlers = {
+    leftDock,
+    inspector,
+    primaryTabs,
+    handleCyclePrimaryTab,
+    handleClosePrimaryTab,
+    handleSplitPageToSecondary,
+  };
+  const workspaceShortcutsRef = useRef(workspaceShortcutHandlers);
+  workspaceShortcutsRef.current = workspaceShortcutHandlers;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        isWritableElement(event.target)
+      ) {
+        return;
+      }
+
+      const {
+        leftDock: dock,
+        inspector: panel,
+        handleCyclePrimaryTab: cycleTab,
+        handleClosePrimaryTab: closeTab,
+        handleSplitPageToSecondary: splitTab,
+      } = workspaceShortcutsRef.current;
+
+      const activePageId = workspaceRef.current?.activePageId ?? null;
+      const run = (action: () => void) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        action();
+      };
+
+      // plain Cmd
+      if (!event.altKey && !event.shiftKey) {
+        switch (event.code) {
+          case "Backslash":
+            return run(dock.toggleCollapsed);
+          case "Digit1":
+            return run(() => dock.openTab("pages"));
+          case "Digit2":
+            return run(() => dock.openTab("library"));
+          case "Digit3":
+            return run(() => dock.openTab("search"));
+          case "KeyP":
+            return run(() => setIsWorkspaceSearchOpen(true));
+          case "KeyT":
+            return run(() => setNewPageDialogTarget("primary"));
+        }
+        return;
+      }
+
+      // Cmd+Alt
+      if (event.altKey && !event.shiftKey) {
+        switch (event.code) {
+          case "Backslash":
+            return run(panel.toggleCollapsed);
+          case "ArrowRight":
+            return run(() => cycleTab(1));
+          case "ArrowLeft":
+            return run(() => cycleTab(-1));
+        }
+        return;
+      }
+
+      // Cmd+Shift
+      if (event.shiftKey && !event.altKey) {
+        switch (event.code) {
+          case "KeyW":
+            return activePageId ? run(() => closeTab(activePageId)) : undefined;
+          case "Backslash":
+            return activePageId ? run(() => splitTab(activePageId)) : undefined;
+        }
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
+  // Backs the Ctrl/Cmd+T "New page" flow. Folder/file creation reuse the
+  // exact same pure `WorkspaceData` helpers the rail's inline "+" buttons
+  // use; the only new piece is routing the *result* to whichever pane asked
+  // for it without letting a "new page → secondary" request silently steal
+  // `workspace.activePageId` (which must keep meaning "what primary shows").
+  const handleSubmitNewPageDialog = async (input: NewPageDialogSubmitInput) => {
+    const currentWorkspace = workspaceRef.current;
+    if (!currentWorkspace) {
+      return;
+    }
+    const target = newPageDialogTarget ?? "primary";
+    setNewPageDialogTarget(null);
+
+    try {
+      let nextWorkspace = currentWorkspace;
+      let folderId = input.folderId;
+
+      if (!folderId && input.newFolderName) {
+        const result = addWorkspaceFolder(nextWorkspace, {
+          name: input.newFolderName,
+        });
+        nextWorkspace = result.workspace;
+        folderId = result.folder.id;
+      }
+      if (!folderId) {
+        throw new Error("Choose or create a folder for the new page.");
+      }
+
+      let newPageId: string;
+
+      if (!input.fileId && input.newFileName) {
+        const result = addWorkspaceFile(nextWorkspace, folderId, {
+          name: input.newFileName,
+        });
+        nextWorkspace =
+          input.pageName && input.pageName !== result.page.name
+            ? renameWorkspaceItem(
+                result.workspace,
+                "page",
+                result.page.id,
+                input.pageName,
+              )
+            : result.workspace;
+        newPageId = result.page.id;
+      } else if (input.fileId) {
+        const result = addWorkspacePage(nextWorkspace, input.fileId, {
+          name: input.pageName,
+        });
+        nextWorkspace = result.workspace;
+        newPageId = result.page.id;
+      } else {
+        throw new Error("Choose or create a file for the new page.");
+      }
+
+      if (target === "secondary") {
+        // Persist the tree, but keep `activePageId` pointing at whatever
+        // primary currently shows — this creation must not silently switch
+        // primary's canvas.
+        const persisted = {
+          ...nextWorkspace,
+          activePageId: currentWorkspace.activePageId,
+          updatedAt: Date.now(),
+        };
+        await WorkspaceData.saveMetadata(persisted);
+        commitWorkspaceState(persisted);
+        handleSplitPageToSecondary(newPageId);
+      } else {
+        await activateWorkspacePage(newPageId, nextWorkspace, true);
+      }
+    } catch (error) {
+      reportWorkspaceError(error);
+    }
+  };
+
   const workspaceController: WorkspaceController = {
     workspace,
     saveStatus: workspaceSaveStatus,
@@ -1060,183 +1415,315 @@ const ExcalidrawWrapper = () => {
     );
   }
 
+  const primaryEditorTabs: EditorTab[] = primaryTabs
+    .map((pageId) => {
+      const page = workspace?.pages.find((item) => item.id === pageId);
+      if (!page) {
+        return null;
+      }
+      const file = workspace?.files.find((item) => item.id === page.fileId);
+      return { pageId, label: page.name, secondaryLabel: file?.name };
+    })
+    .filter((tab): tab is NonNullable<typeof tab> => tab !== null);
+
   return (
-    <div style={{ height: "100%" }} className="excalidraw-app">
-      <Excalidraw
-        onChange={onChange}
-        onExport={onExport}
-        initialData={initialStatePromiseRef.current.promise}
-        UIOptions={{
-          canvasActions: {
-            toggleTheme: true,
-          },
-        }}
-        langCode={langCode}
-        renderCustomStats={renderCustomStats}
-        detectScroll={false}
-        handleKeyboardGlobally={true}
-        autoFocus={true}
-        theme={editorTheme}
-        onThemeChange={setAppTheme}
-        renderTopRightUI={(isMobile) => {
-          if (isMobile || !excalidrawAPI) {
-            return null;
-          }
-
-          return (
-            <div className="excalidraw-ui-top-right">
-              <QuickAccessActions excalidrawAPI={excalidrawAPI} />
-            </div>
-          );
-        }}
-        onLinkOpen={(element, event) => {
-          if (element.link && isElementLink(element.link)) {
-            event.preventDefault();
-            excalidrawAPI?.setViewport({
-              target: element.link,
-              fit: "scale-down",
-              animation: true,
-            });
-          }
-        }}
-      >
-        <WorkspaceRail workspaceController={workspaceController} />
-        <AppMainMenu
-          theme={appTheme}
-          refresh={() => forceRefresh((prev) => !prev)}
-        />
-        <AppWelcomeScreen />
-        <OverwriteConfirmDialog>
-          <OverwriteConfirmDialog.Actions.ExportToImage />
-          <OverwriteConfirmDialog.Actions.SaveToDisk />
-        </OverwriteConfirmDialog>
-        <AppFooter onChange={() => excalidrawAPI?.refresh()} />
-
-        <TTDDialogTrigger />
-        {localStorageQuotaExceeded && (
-          <div className="alert alert--danger">
-            {t("alerts.localStorageQuotaExceeded")}
-          </div>
-        )}
-
-        <AppSidebar
+    <div
+      style={{ height: "100%" }}
+      className={`excalidraw-app excalidraw${
+        editorTheme === "dark" ? " theme--dark" : ""
+      }`}
+    >
+      <div className="app-shell">
+        <LeftDock
+          state={leftDock}
           workspaceController={workspaceController}
-          excalidrawAPI={excalidrawAPI}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onLibraryHostChange={setLibraryHost}
+          onSearchHostChange={setSearchHost}
         />
+        <div className="app-panes" ref={panesContainerRef}>
+          <div
+            className="app-pane app-pane--primary"
+            style={secondaryPane ? { flex: `0 0 ${splitPct}%` } : undefined}
+          >
+            <EditorTabBar
+              tabs={primaryEditorTabs}
+              activeId={workspace?.activePageId ?? null}
+              onSelect={handleSelectPrimaryTab}
+              onClose={handleClosePrimaryTab}
+              onNewTab={() => setNewPageDialogTarget("primary")}
+              onSplitTab={handleSplitPageToSecondary}
+              trailing={
+                <button
+                  type="button"
+                  className={`chrome-icon-button${
+                    inspector.isCollapsed ? "" : " is-active"
+                  }`}
+                  aria-label="Toggle design panel"
+                  aria-pressed={!inspector.isCollapsed}
+                  title="Toggle design panel (⌘⌥\)"
+                  onClick={inspector.toggleCollapsed}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true" fill="none">
+                    <rect
+                      x="2.75"
+                      y="3.75"
+                      width="14.5"
+                      height="12.5"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                    />
+                    <path
+                      d="M12 3.75v12.5"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                    />
+                  </svg>
+                </button>
+              }
+            />
+            <div className="app-pane-canvas">
+              <Excalidraw
+                onChange={onChange}
+                onExport={onExport}
+                initialData={initialStatePromiseRef.current.promise}
+                UIOptions={{
+                  canvasActions: {
+                    toggleTheme: true,
+                  },
+                }}
+                langCode={langCode}
+                renderCustomStats={renderCustomStats}
+                detectScroll={false}
+                handleKeyboardGlobally={!secondaryPane}
+                autoFocus={true}
+                theme={editorTheme}
+                onThemeChange={setAppTheme}
+                renderTopRightUI={(isMobile) => {
+                  if (isMobile || !excalidrawAPI) {
+                    return null;
+                  }
 
-        {isWorkspaceSearchOpen && (
-          <WorkspaceSearchDialog
-            onClose={() => setIsWorkspaceSearchOpen(false)}
-            workspaceController={workspaceController}
-            excalidrawAPI={excalidrawAPI}
-          />
-        )}
+                  return (
+                    <div className="excalidraw-ui-top-right">
+                      <QuickAccessActions excalidrawAPI={excalidrawAPI} />
+                    </div>
+                  );
+                }}
+                onLinkOpen={(element, event) => {
+                  if (element.link && isElementLink(element.link)) {
+                    event.preventDefault();
+                    excalidrawAPI?.setViewport({
+                      target: element.link,
+                      fit: "scale-down",
+                      animation: true,
+                    });
+                  }
+                }}
+              >
+                <AppMainMenu
+                  theme={appTheme}
+                  refresh={() => forceRefresh((prev) => !prev)}
+                />
+                <AppWelcomeScreen />
+                <OverwriteConfirmDialog>
+                  <OverwriteConfirmDialog.Actions.ExportToImage />
+                  <OverwriteConfirmDialog.Actions.SaveToDisk />
+                </OverwriteConfirmDialog>
+                <AppFooter onChange={() => excalidrawAPI?.refresh()} />
 
-        {isSettingsOpen && (
-          <SettingsDialog
-            onClose={() => setIsSettingsOpen(false)}
-            workspaceDirectory={workspaceDirectory}
-            appTheme={appTheme}
-            onThemeChange={setAppTheme}
-            appVersion={appVersion}
-            overrides={shortcutOverrides}
-            onSaveOverrides={handleSaveShortcutOverrides}
-          />
-        )}
+                <TTDDialogTrigger />
+                {localStorageQuotaExceeded && (
+                  <div className="alert alert--danger">
+                    {t("alerts.localStorageQuotaExceeded")}
+                  </div>
+                )}
 
-        {errorMessage && (
-          <ErrorDialog onClose={() => setErrorMessage("")}>
-            {errorMessage}
-          </ErrorDialog>
-        )}
+                <AppSidebar
+                  workspaceController={workspaceController}
+                  excalidrawAPI={excalidrawAPI}
+                />
 
-        <CommandPalette
-          customCommandPaletteItems={[
-            {
-              label: "GitHub",
-              icon: GithubIcon,
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              keywords: [
-                "issues",
-                "bugs",
-                "requests",
-                "report",
-                "features",
-                "social",
-                "community",
-              ],
-              perform: () => {
-                window.open(
-                  "https://github.com/excalidraw/excalidraw",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            {
-              label: t("labels.followUs"),
-              icon: XBrandIcon,
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              keywords: ["twitter", "contact", "social", "community"],
-              perform: () => {
-                window.open(
-                  "https://x.com/excalidraw",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            {
-              label: t("labels.discordChat"),
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              icon: DiscordIcon,
-              keywords: [
-                "chat",
-                "talk",
-                "contact",
-                "bugs",
-                "requests",
-                "report",
-                "feedback",
-                "suggestions",
-                "social",
-                "community",
-              ],
-              perform: () => {
-                window.open(
-                  "https://discord.gg/UexuTaE",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-            {
-              label: "YouTube",
-              icon: youtubeIcon,
-              category: DEFAULT_CATEGORIES.links,
-              predicate: true,
-              keywords: ["features", "tutorials", "howto", "help", "community"],
-              perform: () => {
-                window.open(
-                  "https://youtube.com/@excalidraw",
-                  "_blank",
-                  "noopener noreferrer",
-                );
-              },
-            },
-          ]}
+                {/* Mounted here for the editor's React contexts, rendered
+                    into the shell's own columns via portals. */}
+                <InspectorPanel host={inspectorHost} state={inspector} />
+                <LibraryDockPanel host={libraryHost} />
+                <SearchDockPanel
+                  host={searchHost}
+                  workspaceController={workspaceController}
+                  excalidrawAPI={excalidrawAPI}
+                />
+
+                {isWorkspaceSearchOpen && (
+                  <WorkspaceSearchDialog
+                    onClose={() => setIsWorkspaceSearchOpen(false)}
+                    workspaceController={workspaceController}
+                    excalidrawAPI={excalidrawAPI}
+                  />
+                )}
+
+                {isSettingsOpen && (
+                  <SettingsDialog
+                    onClose={() => setIsSettingsOpen(false)}
+                    workspaceDirectory={workspaceDirectory}
+                    appTheme={appTheme}
+                    onThemeChange={setAppTheme}
+                    appVersion={appVersion}
+                    overrides={shortcutOverrides}
+                    onSaveOverrides={handleSaveShortcutOverrides}
+                  />
+                )}
+
+                {errorMessage && (
+                  <ErrorDialog onClose={() => setErrorMessage("")}>
+                    {errorMessage}
+                  </ErrorDialog>
+                )}
+
+                <CommandPalette
+                  customCommandPaletteItems={[
+                    {
+                      label: "GitHub",
+                      icon: GithubIcon,
+                      category: DEFAULT_CATEGORIES.links,
+                      predicate: true,
+                      keywords: [
+                        "issues",
+                        "bugs",
+                        "requests",
+                        "report",
+                        "features",
+                        "social",
+                        "community",
+                      ],
+                      perform: () => {
+                        window.open(
+                          "https://github.com/excalidraw/excalidraw",
+                          "_blank",
+                          "noopener noreferrer",
+                        );
+                      },
+                    },
+                    {
+                      label: t("labels.followUs"),
+                      icon: XBrandIcon,
+                      category: DEFAULT_CATEGORIES.links,
+                      predicate: true,
+                      keywords: ["twitter", "contact", "social", "community"],
+                      perform: () => {
+                        window.open(
+                          "https://x.com/excalidraw",
+                          "_blank",
+                          "noopener noreferrer",
+                        );
+                      },
+                    },
+                    {
+                      label: t("labels.discordChat"),
+                      category: DEFAULT_CATEGORIES.links,
+                      predicate: true,
+                      icon: DiscordIcon,
+                      keywords: [
+                        "chat",
+                        "talk",
+                        "contact",
+                        "bugs",
+                        "requests",
+                        "report",
+                        "feedback",
+                        "suggestions",
+                        "social",
+                        "community",
+                      ],
+                      perform: () => {
+                        window.open(
+                          "https://discord.gg/UexuTaE",
+                          "_blank",
+                          "noopener noreferrer",
+                        );
+                      },
+                    },
+                    {
+                      label: "YouTube",
+                      icon: youtubeIcon,
+                      category: DEFAULT_CATEGORIES.links,
+                      predicate: true,
+                      keywords: [
+                        "features",
+                        "tutorials",
+                        "howto",
+                        "help",
+                        "community",
+                      ],
+                      perform: () => {
+                        window.open(
+                          "https://youtube.com/@excalidraw",
+                          "_blank",
+                          "noopener noreferrer",
+                        );
+                      },
+                    },
+                  ]}
+                />
+                {isVisualDebuggerEnabled() && excalidrawAPI && (
+                  <DebugCanvas
+                    appState={excalidrawAPI.getAppState()}
+                    scale={window.devicePixelRatio}
+                    ref={debugCanvasRef}
+                  />
+                )}
+                {newPageDialogTarget && (
+                  <NewPageDialog
+                    workspace={workspace}
+                    targetLabel={
+                      newPageDialogTarget === "primary" ? "main" : "split"
+                    }
+                    onClose={() => setNewPageDialogTarget(null)}
+                    onSubmit={(input) => void handleSubmitNewPageDialog(input)}
+                  />
+                )}
+              </Excalidraw>
+            </div>
+          </div>
+
+          {secondaryPane && (
+            <>
+              <div
+                className="app-pane-divider"
+                onPointerDown={handleDividerPointerDown}
+                onPointerMove={handleDividerPointerMove}
+                onPointerUp={handleDividerPointerUp}
+              />
+              <div className="app-pane app-pane--secondary" style={{ flex: 1 }}>
+                <SecondaryPagePane
+                  workspace={workspace}
+                  tabs={secondaryPane.tabs}
+                  activePageId={secondaryPane.activePageId}
+                  editorTheme={editorTheme}
+                  appTheme={appTheme}
+                  onThemeChange={setAppTheme}
+                  onSelectTab={handleSelectSecondaryTab}
+                  onCloseTab={handleCloseSecondaryTab}
+                  onClosePane={handleCloseSecondaryPane}
+                  onNewTab={() => setNewPageDialogTarget("secondary")}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Portal target for the design inspector. Kept outside
+            `.excalidraw-container` on purpose: the library's
+            `getViewportOffsets()` DOM sweep then correctly ignores it, because
+            there is no canvas hidden underneath a panel that the canvas was
+            never sized to include. */}
+        <aside
+          className="app-inspector-host"
+          ref={setInspectorHost}
+          aria-label="Design"
         />
-        {isVisualDebuggerEnabled() && excalidrawAPI && (
-          <DebugCanvas
-            appState={excalidrawAPI.getAppState()}
-            scale={window.devicePixelRatio}
-            ref={debugCanvasRef}
-          />
-        )}
-      </Excalidraw>
+      </div>
     </div>
   );
 };

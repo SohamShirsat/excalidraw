@@ -49,7 +49,8 @@ export type MenuActionId =
   | "export-json"
   | "change-canvas-background"
   | "open-settings"
-  | "open-workspace-search";
+  | "open-workspace-search"
+  | "open-new-page";
 
 /** Options accepted by the `dialog:confirm` IPC handler in `electron/main.ts`. */
 export type ConfirmDialogOptions = {

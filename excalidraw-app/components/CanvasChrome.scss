@@ -1,0 +1,88 @@
+// =============================================================================
+// Reconciles Excalidraw's own floating chrome with the docked app shell.
+//
+// Upstream assumes it owns the whole viewport and floats every surface over a
+// full-bleed canvas. Here the canvas is one column of three, and two of those
+// surfaces have permanent homes elsewhere:
+//
+//   * the styles panel  -> the right-hand design inspector (InspectorPanel.tsx)
+//   * the shape library -> the left dock's Library tab      (LeftDock.tsx)
+//
+// Everything below is scoped under `.app-shell` so the library's own test
+// suite and any non-shell rendering path are untouched.
+// =============================================================================
+
+.app-shell {
+  // --- surfaces that moved ---------------------------------------------------
+
+  // Selected-shape styles now live in the inspector. Hidden rather than
+  // disabled upstream so the library keeps rendering it for the (unchanged)
+  // mobile/phone layout, which still needs the floating island.
+  .excalidraw:not(.excalidraw--mobile) .selected-shape-actions-container {
+    display: none;
+  }
+
+  // The library trigger in the top-right corner — the library is reachable
+  // from the left dock now, and a second entry point that opens a *different*
+  // surface in a *different* corner is exactly the kind of duplicated
+  // affordance that makes an app feel unowned.
+  .default-sidebar-trigger {
+    display: none;
+  }
+
+  // --- canvas surface --------------------------------------------------------
+
+  .excalidraw {
+    // The library paints the canvas surround; with docked panels the shell
+    // owns the window background instead.
+    --default-bg-color: transparent;
+  }
+
+  .excalidraw-container {
+    height: 100%;
+    width: 100%;
+  }
+
+  // --- toolbar ---------------------------------------------------------------
+  // Kept top-centre (Figma's placement). Restyled from the default island into
+  // a slightly tighter floating pill that reads as a tool, not a dialog.
+
+  .App-toolbar-container .App-toolbar {
+    border-radius: 0.625rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 18px rgba(0, 0, 0, 0.09);
+    border: 1px solid var(--chrome-border);
+  }
+
+  .theme--dark & .App-toolbar-container .App-toolbar,
+  &.theme--dark .App-toolbar-container .App-toolbar {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.5);
+  }
+
+  // --- main menu -------------------------------------------------------------
+  // The hamburger stays in the canvas's top-left corner (Figma keeps its
+  // document menu there too), but shrunk so it reads as secondary to the
+  // toolbar rather than competing with it.
+
+  .excalidraw-ui-top-left .dropdown-menu-button {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.07);
+    border: 1px solid var(--chrome-border);
+  }
+
+  // --- footer ----------------------------------------------------------------
+
+  .layer-ui__wrapper__footer-left {
+    .zoom-actions,
+    .undo-redo-buttons {
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.07);
+      border: 1px solid var(--chrome-border);
+    }
+  }
+
+  // --- canvas search sidebar -------------------------------------------------
+  // Still reachable via Cmd+F. It docks to the right edge of the *canvas pane*
+  // (its container is the pane, not the window), so it overlays the canvas and
+  // sits cleanly beside the inspector instead of fighting it.
+  .default-sidebar {
+    border-radius: 0.625rem;
+  }
+}

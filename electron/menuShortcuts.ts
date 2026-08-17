@@ -38,7 +38,13 @@ export const MENU_SYNTHETIC_KEYDOWN_PAYLOADS: Record<
   | "commandPalette"
   | "searchMenu"
   | "toggleTheme"
-  | "keyboardShortcuts",
+  | "keyboardShortcuts"
+  | "toggleLeftDock"
+  | "toggleInspector"
+  | "nextTab"
+  | "previousTab"
+  | "closeTab"
+  | "splitView",
   SyntheticKeydownPayload
 > = {
   openScene: getDefaultBinding("loadScene"),
@@ -48,4 +54,13 @@ export const MENU_SYNTHETIC_KEYDOWN_PAYLOADS: Record<
   searchMenu: getDefaultBinding("searchMenu"),
   toggleTheme: getDefaultBinding("toggleTheme"),
   keyboardShortcuts: getDefaultBinding("toggleShortcuts"),
+  // Workspace chrome. These resolve to the app's own capture-phase listeners
+  // in `excalidraw-app/App.tsx` rather than an editor `keyTest`, but the
+  // synthetic-keydown replay path is identical either way.
+  toggleLeftDock: getDefaultBinding("workspace.toggleLeftDock"),
+  toggleInspector: getDefaultBinding("workspace.toggleInspector"),
+  nextTab: getDefaultBinding("workspace.nextTab"),
+  previousTab: getDefaultBinding("workspace.previousTab"),
+  closeTab: getDefaultBinding("workspace.closeTab"),
+  splitView: getDefaultBinding("workspace.splitView"),
 };

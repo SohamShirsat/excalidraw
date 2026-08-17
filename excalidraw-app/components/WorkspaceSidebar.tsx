@@ -507,15 +507,11 @@ export const WorkspaceSidebar = ({
   return (
     <div className="workspace-sidebar">
       <div className="workspace-sidebar-heading">
-        <div>
-          <h2>{workspace.name}</h2>
-          <div
-            className={`workspace-save-status is-${saveStatus}`}
-            role="status"
-          >
-            <span className="workspace-save-dot" />
-            {getSaveLabel(saveStatus)}
-          </div>
+        {/* No workspace-name heading here: the dock's own panel header already
+            labels this surface, and the footer states the repository path. */}
+        <div className={`workspace-save-status is-${saveStatus}`} role="status">
+          <span className="workspace-save-dot" />
+          {getSaveLabel(saveStatus)}
         </div>
         <button
           type="button"
