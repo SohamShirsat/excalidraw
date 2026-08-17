@@ -112,9 +112,11 @@ const parseStoredScene = (scene: string): WorkspaceSearchScene | null => {
 export const WorkspaceSearchSidebar = ({
   workspaceController,
   excalidrawAPI,
+  onClose,
 }: {
   workspaceController: WorkspaceController;
   excalidrawAPI: ExcalidrawImperativeAPI | null;
+  onClose?: () => void;
 }) => {
   const { workspace, onOpenPage } = workspaceController;
   const setAppState = useExcalidrawSetAppState();
@@ -274,12 +276,15 @@ export const WorkspaceSearchSidebar = ({
           tab: LIBRARY_SIDEBAR_TAB,
         },
       });
+      onClose?.();
       return;
     }
 
     if (result.pageId) {
       await onOpenPage(result.pageId);
     }
+
+    onClose?.();
 
     if (result.elementId && excalidrawAPI) {
       window.requestAnimationFrame(() => {
@@ -321,6 +326,8 @@ export const WorkspaceSearchSidebar = ({
       event.stopPropagation();
       if (query) {
         setQuery("");
+      } else if (onClose) {
+        onClose();
       } else {
         setAppState({ openSidebar: null });
       }

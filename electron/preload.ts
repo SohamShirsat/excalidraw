@@ -7,6 +7,8 @@ import type { IpcRendererEvent } from "electron";
 import type {
   ConfirmDialogOptions,
   MenuActionId,
+  OpenFilesDialogOptions,
+  OpenedFile,
   SyntheticKeydownPayload,
 } from "./appIpcChannels";
 import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
@@ -94,6 +96,14 @@ const electronAppBridge = {
    */
   confirm: (options: ConfirmDialogOptions): Promise<boolean> =>
     ipcRenderer.invoke(APP_IPC_CHANNELS.dialogConfirm, options),
+
+  /** Native file chooser for imports in the Electron renderer. */
+  openFiles: (options: OpenFilesDialogOptions): Promise<OpenedFile[]> =>
+    ipcRenderer.invoke(APP_IPC_CHANNELS.dialogOpenFiles, options),
+
+  /** The packaged app version shown in Settings → About. */
+  getVersion: (): Promise<string> =>
+    ipcRenderer.invoke(APP_IPC_CHANNELS.appVersion),
 
   /**
    * Remappable-shortcut override persistence — reads/writes

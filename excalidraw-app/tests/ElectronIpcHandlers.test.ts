@@ -163,4 +163,20 @@ describe("electron/ipcHandlers", () => {
       await handlers[WORKSPACE_IPC_CHANNELS.pagesRead](FAKE_EVENT, "page-1"),
     ).toBe(scenes[scenes.length - 1]);
   });
+
+  it("reports in-flight writes so the shell can guard an in-progress quit", async () => {
+    const workspaceRoot = await createTemporaryWorkspace();
+    const store = new PersonalWorkspaceStore(workspaceRoot);
+    const writeStates: number[] = [];
+    const handlers = createWorkspaceIpcHandlers(store, (count) => {
+      writeStates.push(count);
+    });
+
+    await handlers[WORKSPACE_IPC_CHANNELS.metadataWrite](
+      FAKE_EVENT,
+      createWorkspace(),
+    );
+
+    expect(writeStates).toEqual([1, 0]);
+  });
 });

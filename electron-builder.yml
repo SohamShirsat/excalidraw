@@ -15,6 +15,7 @@ files:
   - package.json
   - "!**/*.map"
 mac:
+  icon: electron/assets/personal-excalidraw.icns
   target:
     - dmg
     - zip

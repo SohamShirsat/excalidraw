@@ -41,10 +41,30 @@ const sendMenuAction = (mainWindow: BrowserWindow, actionId: MenuActionId) => {
 
 export const buildApplicationMenu = (mainWindow: BrowserWindow): Menu => {
   const template: MenuItemConstructorOptions[] = [
-    // macOS convention: About/Services/Hide/Hide Others/Show All/Quit, all
-    // labeled from `app.name` (set via `app.setName(...)` in `main.ts`) —
-    // no need to hand-roll an "About Personal Excalidraw" item alongside it.
-    { role: "appMenu" },
+    // macOS convention: About/Preferences/Hide/Hide Others/Show All/Quit.
+    // This is explicit (rather than relying on Electron's default appMenu)
+    // because Settings is an app-level concern, distinct from Excalidraw's
+    // in-canvas Preferences submenu.
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        {
+          label: "Preferences…",
+          accelerator: "CmdOrCtrl+,",
+          click: () => sendMenuAction(mainWindow, "open-settings"),
+        },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
     {
       label: "File",
       submenu: [
@@ -57,6 +77,14 @@ export const buildApplicationMenu = (mainWindow: BrowserWindow): Menu => {
               mainWindow,
               MENU_SYNTHETIC_KEYDOWN_PAYLOADS.openScene,
             ),
+        },
+        {
+          // Cmd+K is already Excalidraw's "add link" shortcut, so the
+          // workspace-wide search uses the equally familiar Cmd+P palette
+          // convention instead of stealing an editor action.
+          label: "Search Workspace…",
+          accelerator: "CmdOrCtrl+P",
+          click: () => sendMenuAction(mainWindow, "open-workspace-search"),
         },
         {
           // Mirrors `MainMenu.DefaultItems.SaveToActiveFile` (shortcutMap.saveScene).

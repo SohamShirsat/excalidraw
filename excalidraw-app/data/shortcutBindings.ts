@@ -505,3 +505,35 @@ export const getEffectiveBindings = (
     }
     return { ...definition, defaultBinding: override };
   });
+
+/**
+ * Compares the complete shortcut chord. Modifiers are normalized to booleans
+ * because browser KeyboardEvents omit false modifier fields while persisted
+ * bindings commonly omit them altogether.
+ */
+export const shortcutBindingsEqual = (
+  first: ShortcutBinding,
+  second: ShortcutBinding,
+) =>
+  first.key.toLocaleLowerCase() === second.key.toLocaleLowerCase() &&
+  first.code === second.code &&
+  !!first.metaKey === !!second.metaKey &&
+  !!first.ctrlKey === !!second.ctrlKey &&
+  !!first.shiftKey === !!second.shiftKey &&
+  !!first.altKey === !!second.altKey;
+
+/**
+ * Finds the effective action already using a candidate chord. The Settings
+ * surface uses this before saving a rebind so one keystroke never has two
+ * competing actions. `excludingId` lets an action keep its own binding.
+ */
+export const findShortcutConflict = (
+  effectiveBindings: readonly ShortcutDefinition[],
+  candidate: ShortcutBinding,
+  excludingId?: string,
+): ShortcutDefinition | null =>
+  effectiveBindings.find(
+    (definition) =>
+      definition.id !== excludingId &&
+      shortcutBindingsEqual(definition.defaultBinding, candidate),
+  ) ?? null;

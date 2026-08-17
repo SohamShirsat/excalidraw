@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  findShortcutConflict,
   getEffectiveBindings,
   SHORTCUT_DEFINITIONS,
+  shortcutBindingsEqual,
 } from "../data/shortcutBindings";
 
 describe("data/shortcutBindings", () => {
@@ -86,6 +88,57 @@ describe("data/shortcutBindings", () => {
       expect(effective.find((d) => d.id === "cut")?.defaultBinding).toEqual(
         canonicalCut.defaultBinding,
       );
+    });
+  });
+
+  describe("shortcut conflict detection", () => {
+    it("matches a binding even when false modifier fields are omitted", () => {
+      expect(
+        shortcutBindingsEqual(
+          { key: "r", code: "KeyR" },
+          {
+            key: "R",
+            code: "KeyR",
+            metaKey: false,
+            ctrlKey: false,
+            shiftKey: false,
+            altKey: false,
+          },
+        ),
+      ).toBe(true);
+    });
+
+    it("finds an effective conflict but ignores the action being rebound", () => {
+      const effective = getEffectiveBindings({
+        "tool.rectangle": { key: "j", code: "KeyJ", metaKey: true },
+      });
+
+      expect(
+        findShortcutConflict(effective, {
+          key: "j",
+          code: "KeyJ",
+          metaKey: true,
+        })?.id,
+      ).toBe("tool.rectangle");
+      expect(
+        findShortcutConflict(
+          effective,
+          { key: "j", code: "KeyJ", metaKey: true },
+          "tool.rectangle",
+        ),
+      ).toBeNull();
+    });
+
+    it("does not treat the same key with a different modifier chord as a conflict", () => {
+      const effective = getEffectiveBindings({});
+
+      expect(
+        findShortcutConflict(effective, {
+          key: "r",
+          code: "KeyR",
+          metaKey: true,
+        }),
+      ).toBeNull();
     });
   });
 });

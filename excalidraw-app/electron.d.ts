@@ -48,7 +48,11 @@ export interface SyntheticKeydownPayload {
 }
 
 /** Bespoke menu action ids with no existing keyboard shortcut to synthesize. */
-export type MenuActionId = "export-json" | "change-canvas-background";
+export type MenuActionId =
+  | "export-json"
+  | "change-canvas-background"
+  | "open-settings"
+  | "open-workspace-search";
 
 export interface ConfirmDialogOptions {
   title: string;
@@ -56,6 +60,17 @@ export interface ConfirmDialogOptions {
   detail?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+}
+
+export interface OpenFilesDialogOptions {
+  description: string;
+  extensions?: string[];
+  multiple?: boolean;
+}
+
+export interface OpenedFile {
+  name: string;
+  data: Uint8Array;
 }
 
 /**
@@ -71,6 +86,8 @@ export interface ElectronAppBridge {
   ) => () => void;
   onMenuAction: (callback: (actionId: MenuActionId) => void) => () => void;
   confirm: (options: ConfirmDialogOptions) => Promise<boolean>;
+  openFiles: (options: OpenFilesDialogOptions) => Promise<OpenedFile[]>;
+  getVersion: () => Promise<string>;
   readShortcutOverrides: () => Promise<Record<string, ShortcutBinding | null>>;
   writeShortcutOverrides: (
     overrides: Record<string, ShortcutBinding | null>,

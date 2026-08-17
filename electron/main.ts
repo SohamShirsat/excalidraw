@@ -1,4 +1,5 @@
 import path from "node:path";
+import { promises as fs } from "node:fs";
 
 import {
   app,
@@ -15,6 +16,7 @@ import { PersonalWorkspaceStore } from "../excalidraw-app/scripts/PersonalWorksp
 
 import { APP_IPC_CHANNELS } from "./appIpcChannels";
 import { createConfirmHandler } from "./dialogHandlers";
+import { createOpenFilesHandler } from "./fileDialogHandlers";
 import { createWorkspaceIpcHandlers } from "./ipcHandlers";
 import { WORKSPACE_IPC_CHANNELS } from "./ipcChannels";
 import { buildApplicationMenu } from "./menu";
@@ -25,7 +27,10 @@ import {
 } from "./settingsStore";
 import { resolveWorkspaceRoot } from "./workspaceRoot";
 
-import type { ConfirmDialogOptions } from "./appIpcChannels";
+import type {
+  ConfirmDialogOptions,
+  OpenFilesDialogOptions,
+} from "./appIpcChannels";
 import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
 
 const APP_DISPLAY_NAME = "Personal Excalidraw";
@@ -77,6 +82,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow: BrowserWindow | null = null;
+let inFlightWorkspaceWrites = 0;
+let canQuitWithPendingWrites = false;
+let isQuitConfirmationOpen = false;
 
 const registerAppProtocol = () => {
   protocol.handle(APP_SCHEME, (request) => {
@@ -106,10 +114,15 @@ const createMainWindow = async () => {
     width: windowState.width,
     height: windowState.height,
     show: false,
-    // Placeholder only — a real multi-resolution macOS `.icns` is deferred
-    // to a later icon-polish pass. This just keeps dev mode from showing
-    // the generic Electron icon.
-    icon: path.join(app.getAppPath(), "public", "android-chrome-512x512.png"),
+    // The packaged app receives this same multi-resolution icon from
+    // electron-builder.yml. In development it also prevents the generic
+    // Electron icon from appearing in the Dock.
+    icon: path.join(
+      app.getAppPath(),
+      "electron",
+      "assets",
+      "personal-excalidraw.icns",
+    ),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -143,7 +156,9 @@ const createMainWindow = async () => {
 };
 
 const registerWorkspaceIpcHandlers = (store: PersonalWorkspaceStore) => {
-  const handlers = createWorkspaceIpcHandlers(store);
+  const handlers = createWorkspaceIpcHandlers(store, (pendingWrites) => {
+    inFlightWorkspaceWrites = pendingWrites;
+  });
   ipcMain.handle(
     WORKSPACE_IPC_CHANNELS.status,
     handlers[WORKSPACE_IPC_CHANNELS.status],
@@ -199,6 +214,18 @@ const registerAppIpcHandlers = () => {
     APP_IPC_CHANNELS.dialogConfirm,
     (_event, options: ConfirmDialogOptions) => confirmHandler(options),
   );
+  const openFilesHandler = createOpenFilesHandler(
+    (options) =>
+      mainWindow
+        ? dialog.showOpenDialog(mainWindow, options)
+        : dialog.showOpenDialog(options),
+    (filePath) => fs.readFile(filePath),
+  );
+  ipcMain.handle(
+    APP_IPC_CHANNELS.dialogOpenFiles,
+    (_event, options: OpenFilesDialogOptions) => openFilesHandler(options),
+  );
+  ipcMain.handle(APP_IPC_CHANNELS.appVersion, () => app.getVersion());
 
   // Remappable-shortcut overrides — see `excalidraw-app/data/shortcutBindings.ts`
   // for the canonical registry these overrides get merged onto, and
@@ -218,6 +245,8 @@ const registerAppIpcHandlers = () => {
   console.info(
     `[electron/main] app IPC handlers registered: ${[
       APP_IPC_CHANNELS.dialogConfirm,
+      APP_IPC_CHANNELS.dialogOpenFiles,
+      APP_IPC_CHANNELS.appVersion,
       APP_IPC_CHANNELS.settingsShortcutsRead,
       APP_IPC_CHANNELS.settingsShortcutsWrite,
     ].join(", ")}`,
@@ -245,6 +274,42 @@ const main = async () => {
     if (process.platform !== "darwin") {
       app.quit();
     }
+  });
+
+  // Autosave means this is normally a no-op. It only appears if the main
+  // process is still serializing a real workspace write, preventing a quit
+  // from racing the filesystem queue without adding a confirmation to every
+  // normal macOS quit.
+  app.on("before-quit", (event) => {
+    if (canQuitWithPendingWrites || inFlightWorkspaceWrites === 0) {
+      return;
+    }
+    event.preventDefault();
+    if (isQuitConfirmationOpen) {
+      return;
+    }
+    isQuitConfirmationOpen = true;
+    void dialog
+      .showMessageBox(mainWindow ?? undefined, {
+        type: "warning",
+        buttons: ["Keep app open", "Quit anyway"],
+        defaultId: 0,
+        cancelId: 0,
+        message: "Saving your workspace…",
+        detail:
+          "A drawing is still being saved locally. Keep the app open until it finishes, or quit now.",
+      })
+      .then(({ response }) => {
+        isQuitConfirmationOpen = false;
+        if (response === 1) {
+          canQuitWithPendingWrites = true;
+          app.quit();
+        }
+      })
+      .catch((error) => {
+        isQuitConfirmationOpen = false;
+        console.error("[electron/main] quit confirmation failed", error);
+      });
   });
 
   app.on("activate", () => {

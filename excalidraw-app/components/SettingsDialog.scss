@@ -1,0 +1,242 @@
+.excalidraw {
+  .settings-dialog .Dialog__content {
+    min-height: min(35rem, 68vh);
+  }
+
+  .settings-dialog-layout {
+    display: grid;
+    grid-template-columns: 10.5rem minmax(0, 1fr);
+    min-height: min(32rem, 62vh);
+  }
+
+  .settings-dialog-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-right: 1.25rem;
+    border-right: 1px solid var(--dialog-border-color);
+
+    button {
+      padding: 0.55rem 0.65rem;
+      border: 0;
+      border-radius: var(--border-radius-md);
+      background: transparent;
+      color: var(--text-primary-color);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.8125rem;
+      text-align: left;
+
+      &:hover,
+      &.is-active {
+        background: var(--color-primary-light);
+        color: var(--color-primary);
+      }
+    }
+  }
+
+  .settings-dialog-panel {
+    min-width: 0;
+    padding-left: 1.5rem;
+
+    h3 {
+      margin: 0 0 1.25rem;
+      font-size: 1rem;
+    }
+  }
+
+  .settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.95rem 0;
+    border-top: 1px solid var(--dialog-border-color);
+    font-size: 0.8125rem;
+    font-weight: 600;
+
+    code {
+      overflow: auto;
+      padding: 0.5rem 0.6rem;
+      border-radius: var(--border-radius-md);
+      background: var(--color-surface-low);
+      color: var(--text-primary-color);
+      font-size: 0.72rem;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+
+    small,
+    p {
+      color: var(--color-gray-60);
+      font-size: 0.72rem;
+      font-weight: 400;
+      line-height: 1.45;
+    }
+  }
+
+  .settings-theme-options {
+    display: inline-flex;
+    align-self: flex-start;
+    overflow: hidden;
+    border: 1px solid var(--dialog-border-color);
+    border-radius: var(--border-radius-md);
+
+    button {
+      padding: 0.45rem 0.7rem;
+      border: 0;
+      border-right: 1px solid var(--dialog-border-color);
+      background: transparent;
+      color: var(--text-primary-color);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.75rem;
+
+      &:last-child {
+        border-right: 0;
+      }
+      &.is-active {
+        background: var(--color-primary);
+        color: var(--color-icon-white);
+      }
+    }
+  }
+
+  .settings-panel-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+
+    h3 {
+      margin-bottom: 0.25rem;
+    }
+    p {
+      margin: 0;
+      color: var(--color-gray-60);
+      font-size: 0.75rem;
+    }
+  }
+
+  .settings-reset-all,
+  .settings-shortcut-reset {
+    border: 1px solid var(--dialog-border-color);
+    border-radius: var(--border-radius-md);
+    background: var(--button-gray-1);
+    color: var(--text-primary-color);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.7rem;
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+    &:not(:disabled):hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+  }
+
+  .settings-reset-all {
+    padding: 0.45rem 0.6rem;
+    white-space: nowrap;
+  }
+  .settings-shortcut-error {
+    margin: 0.9rem 0;
+    color: var(--color-danger);
+    font-size: 0.75rem;
+  }
+  .settings-shortcut-groups {
+    max-height: 50vh;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .settings-shortcut-groups section + section {
+    margin-top: 1.25rem;
+  }
+  .settings-shortcut-groups h4 {
+    margin: 0 0 0.35rem;
+    color: var(--color-gray-60);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+  }
+
+  .settings-shortcut-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 9.5rem 3.5rem;
+    gap: 0.5rem;
+    align-items: center;
+    min-height: 2.6rem;
+    border-top: 1px solid var(--dialog-border-color);
+  }
+
+  .settings-shortcut-copy {
+    min-width: 0;
+    font-size: 0.78rem;
+  }
+  .settings-shortcut-copy small {
+    margin-left: 0.4rem;
+    color: var(--color-primary);
+    font-size: 0.65rem;
+  }
+  .settings-shortcut-binding {
+    min-width: 0;
+    padding: 0.35rem 0.45rem;
+    border: 1px solid var(--dialog-border-color);
+    border-radius: var(--border-radius-md);
+    background: var(--input-bg-color);
+    color: var(--text-primary-color);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.72rem;
+    text-align: center;
+  }
+  .settings-shortcut-binding:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+    outline: 0;
+  }
+  .settings-shortcut-reset {
+    padding: 0.35rem 0.25rem;
+  }
+  .settings-about-copy {
+    margin: -0.75rem 0 1.5rem;
+    color: var(--color-gray-60);
+    font-size: 0.8rem;
+  }
+  .settings-about-details {
+    margin: 0 0 1.5rem;
+  }
+  .settings-about-details div {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    padding: 0.65rem 0;
+    border-top: 1px solid var(--dialog-border-color);
+    font-size: 0.8rem;
+  }
+  .settings-about-details dt {
+    color: var(--color-gray-60);
+  }
+  .settings-about-details dd {
+    margin: 0;
+  }
+
+  @media (max-width: 600px) {
+    .settings-dialog-layout {
+      grid-template-columns: 1fr;
+    }
+    .settings-dialog-nav {
+      flex-direction: row;
+      padding: 0 0 0.75rem;
+      border-right: 0;
+      border-bottom: 1px solid var(--dialog-border-color);
+    }
+    .settings-dialog-panel {
+      padding: 1.25rem 0 0;
+    }
+    .settings-shortcut-row {
+      grid-template-columns: minmax(0, 1fr) 7rem 3.25rem;
+    }
+  }
+}

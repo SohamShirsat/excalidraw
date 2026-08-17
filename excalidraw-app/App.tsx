@@ -4,7 +4,6 @@ import {
   CaptureUpdateAction,
   ExcalidrawAPIProvider,
   useExcalidrawAPI,
-  DefaultSidebar,
   serializeAsJSON,
 } from "@excalidraw/excalidraw";
 import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
@@ -80,8 +79,12 @@ import {
 } from "./data/LocalData";
 import { RepositoryLibraryAdapter } from "./data/RepositoryLibraryData";
 import { getEffectiveBindings } from "./data/shortcutBindings";
-import { loadShortcutOverrides } from "./data/shortcutOverrides";
+import {
+  loadShortcutOverrides,
+  saveShortcutOverrides,
+} from "./data/shortcutOverrides";
 import { isBrowserStorageStateNewer } from "./data/tabSync";
+import * as WorkspaceTransport from "./data/workspaceTransport";
 import { installShortcutInterceptor } from "./shortcutInterception";
 import { useHandleAppTheme } from "./useHandleAppTheme";
 import { getPreferredLanguage } from "./app-language/language-detector";
@@ -96,10 +99,11 @@ import "./index.scss";
 
 import { AppSidebar } from "./components/AppSidebar";
 import { QuickAccessActions } from "./components/QuickAccessActions";
-import { WorkspaceFolderIcon } from "./components/WorkspaceSidebar";
+import { SettingsDialog } from "./components/SettingsDialog";
+import { WorkspaceRail } from "./components/WorkspaceRail";
+import { WorkspaceSearchDialog } from "./components/WorkspaceSearchDialog";
 import {
   WorkspaceData,
-  WORKSPACE_SIDEBAR_TAB,
   addWorkspaceFile,
   addWorkspaceFolder,
   addWorkspacePage,
@@ -116,7 +120,10 @@ import type {
   WorkspaceItemType,
   WorkspaceMetadata,
 } from "./data/WorkspaceData";
-import type { ShortcutDefinition } from "./data/shortcutBindings";
+import type {
+  ShortcutBinding,
+  ShortcutDefinition,
+} from "./data/shortcutBindings";
 
 polyfill();
 
@@ -182,6 +189,12 @@ const ExcalidrawWrapper = () => {
   const [workspace, setWorkspace] = useState<WorkspaceMetadata | null>(null);
   const [workspaceSaveStatus, setWorkspaceSaveStatus] =
     useState<WorkspaceSaveStatus>("loading");
+  const [workspaceDirectory, setWorkspaceDirectory] = useState<string | null>(
+    null,
+  );
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isWorkspaceSearchOpen, setIsWorkspaceSearchOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState("Development build");
   const workspaceRef = useRef<WorkspaceMetadata | null>(null);
   const activeWorkspacePageIdRef = useRef<string | null>(null);
   const isWorkspaceSwitchingRef = useRef(false);
@@ -203,6 +216,32 @@ const ExcalidrawWrapper = () => {
   });
 
   const [, forceRefresh] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    WorkspaceTransport.getWorkspaceStatus()
+      .then((status) => {
+        if (isMounted) {
+          setWorkspaceDirectory(status.directory);
+        }
+      })
+      .catch((error) => {
+        console.error("[settings] unable to load workspace directory", error);
+      });
+    window.electronApp
+      ?.getVersion()
+      .then((version) => {
+        if (isMounted) {
+          setAppVersion(version);
+        }
+      })
+      .catch((error) => {
+        console.error("[settings] unable to load app version", error);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (isDevEnv()) {
@@ -240,17 +279,26 @@ const ExcalidrawWrapper = () => {
 
     const unsubscribeMenuAction = window.electronApp?.onMenuAction(
       (actionId) => {
-        if (!excalidrawAPI) {
-          return;
-        }
         switch (actionId) {
+          case "open-settings":
+            setIsSettingsOpen(true);
+            break;
+          case "open-workspace-search":
+            setIsWorkspaceSearchOpen(true);
+            break;
           case "export-json":
+            if (!excalidrawAPI) {
+              return;
+            }
             // Mirrors `MainMenu.DefaultItems.Export`'s onSelect exactly.
             excalidrawAPI.updateScene({
               appState: { openDialog: { name: "jsonExport" } },
             });
             break;
           case "change-canvas-background":
+            if (!excalidrawAPI) {
+              return;
+            }
             // Mirrors clicking the in-canvas hamburger menu — the real code
             // path `MainMenu.DefaultItems.ChangeCanvasBackground` (an inline
             // color picker, not a standalone toggle) lives behind
@@ -277,6 +325,9 @@ const ExcalidrawWrapper = () => {
   const shortcutBindingsRef = useRef<ShortcutDefinition[]>(
     getEffectiveBindings({}),
   );
+  const [shortcutOverrides, setShortcutOverrides] = useState<
+    Record<string, ShortcutBinding | null>
+  >({});
 
   useEffect(() => {
     let isMounted = true;
@@ -289,6 +340,7 @@ const ExcalidrawWrapper = () => {
       .then((overrides) => {
         if (isMounted) {
           shortcutBindingsRef.current = getEffectiveBindings(overrides);
+          setShortcutOverrides(overrides);
         }
       })
       .catch((error) => {
@@ -299,6 +351,37 @@ const ExcalidrawWrapper = () => {
       isMounted = false;
       uninstall();
     };
+  }, []);
+
+  const handleSaveShortcutOverrides = useCallback(
+    async (next: Record<string, ShortcutBinding | null>) => {
+      await saveShortcutOverrides(next);
+      shortcutBindingsRef.current = getEffectiveBindings(next);
+      setShortcutOverrides(next);
+    },
+    [],
+  );
+
+  // Cmd+P is reserved for workspace search because Cmd+K already opens the
+  // editor's hyperlink action. Keep this browser-mode listener as a fallback
+  // for `yarn start:personal`; Electron receives the same action from its
+  // native application menu.
+  useEffect(() => {
+    const openWorkspaceSearch = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.code === "KeyP"
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setIsWorkspaceSearchOpen(true);
+      }
+    };
+    document.addEventListener("keydown", openWorkspaceSearch, true);
+    return () =>
+      document.removeEventListener("keydown", openWorkspaceSearch, true);
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -1017,13 +1100,7 @@ const ExcalidrawWrapper = () => {
           }
         }}
       >
-        <DefaultSidebar.Trigger
-          title="Workspace"
-          tab={WORKSPACE_SIDEBAR_TAB}
-          icon={<WorkspaceFolderIcon />}
-        >
-          Workspace
-        </DefaultSidebar.Trigger>
+        <WorkspaceRail workspaceController={workspaceController} />
         <AppMainMenu
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
@@ -1046,6 +1123,26 @@ const ExcalidrawWrapper = () => {
           workspaceController={workspaceController}
           excalidrawAPI={excalidrawAPI}
         />
+
+        {isWorkspaceSearchOpen && (
+          <WorkspaceSearchDialog
+            onClose={() => setIsWorkspaceSearchOpen(false)}
+            workspaceController={workspaceController}
+            excalidrawAPI={excalidrawAPI}
+          />
+        )}
+
+        {isSettingsOpen && (
+          <SettingsDialog
+            onClose={() => setIsSettingsOpen(false)}
+            workspaceDirectory={workspaceDirectory}
+            appTheme={appTheme}
+            onThemeChange={setAppTheme}
+            appVersion={appVersion}
+            overrides={shortcutOverrides}
+            onSaveOverrides={handleSaveShortcutOverrides}
+          />
+        )}
 
         {errorMessage && (
           <ErrorDialog onClose={() => setErrorMessage("")}>

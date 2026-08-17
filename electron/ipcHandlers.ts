@@ -21,14 +21,31 @@ import type { PersonalWorkspaceStore } from "../excalidraw-app/scripts/PersonalW
  * pre-update queue value and start concurrently regardless — which is
  * exactly the bug an earlier version of this file had.
  */
-const createOperationQueue = () => {
+export type WorkspaceWriteStateListener = (inFlightWrites: number) => void;
+
+const createOperationQueue = (
+  onWriteStateChange: WorkspaceWriteStateListener = () => {},
+) => {
   let operationQueue: Promise<void> = Promise.resolve();
+  let inFlightWrites = 0;
 
   const queueOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    inFlightWrites += 1;
+    onWriteStateChange(inFlightWrites);
     const result = operationQueue.then(operation, operation);
     operationQueue = result.then(
       () => undefined,
       () => undefined,
+    );
+    result.then(
+      () => {
+        inFlightWrites -= 1;
+        onWriteStateChange(inFlightWrites);
+      },
+      () => {
+        inFlightWrites -= 1;
+        onWriteStateChange(inFlightWrites);
+      },
     );
     return result;
   };
@@ -51,8 +68,11 @@ const createOperationQueue = () => {
  * be exercised in tests without an actual Electron runtime — `main.ts`
  * registers each entry against `ipcMain.handle` itself.
  */
-export const createWorkspaceIpcHandlers = (store: PersonalWorkspaceStore) => {
-  const { runRead, runWrite } = createOperationQueue();
+export const createWorkspaceIpcHandlers = (
+  store: PersonalWorkspaceStore,
+  onWriteStateChange?: WorkspaceWriteStateListener,
+) => {
+  const { runRead, runWrite } = createOperationQueue(onWriteStateChange);
 
   return {
     [WORKSPACE_IPC_CHANNELS.status]: (_event: IpcMainInvokeEvent) =>

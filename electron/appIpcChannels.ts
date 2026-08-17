@@ -12,6 +12,8 @@ export const APP_IPC_CHANNELS = {
   menuSyntheticKeydown: "menu:synthetic-keydown",
   menuAction: "menu:action",
   dialogConfirm: "dialog:confirm",
+  dialogOpenFiles: "dialog:open-files",
+  appVersion: "app:version",
   settingsShortcutsRead: "settings:shortcuts:read",
   settingsShortcutsWrite: "settings:shortcuts:write",
 } as const;
@@ -43,7 +45,11 @@ export type SyntheticKeydownPayload = {
  * Kept as a closed union so both `electron/menu.ts` (sender) and
  * `excalidraw-app/App.tsx` (handler) stay in sync on the valid ids.
  */
-export type MenuActionId = "export-json" | "change-canvas-background";
+export type MenuActionId =
+  | "export-json"
+  | "change-canvas-background"
+  | "open-settings"
+  | "open-workspace-search";
 
 /** Options accepted by the `dialog:confirm` IPC handler in `electron/main.ts`. */
 export type ConfirmDialogOptions = {
@@ -52,4 +58,16 @@ export type ConfirmDialogOptions = {
   detail?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+};
+
+/** Options and serializable file payloads for Electron's native open dialog. */
+export type OpenFilesDialogOptions = {
+  description: string;
+  extensions?: string[];
+  multiple?: boolean;
+};
+
+export type OpenedFile = {
+  name: string;
+  data: Uint8Array;
 };

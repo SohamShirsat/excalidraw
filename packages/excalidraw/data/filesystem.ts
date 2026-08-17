@@ -10,6 +10,18 @@ import { normalizeFile } from "./blob";
 
 type FILE_EXTENSION = Exclude<keyof typeof MIME_TYPES, "binary">;
 
+type ElectronFileBridge = {
+  openFiles?: (opts: {
+    description: string;
+    extensions?: string[];
+    multiple?: boolean;
+  }) => Promise<{ name: string; data: Uint8Array }[]>;
+};
+
+const getElectronFileBridge = (): ElectronFileBridge | undefined =>
+  (globalThis as typeof globalThis & { electronApp?: ElectronFileBridge })
+    .electronApp;
+
 export const fileOpen = async <M extends boolean | undefined = false>(opts: {
   extensions?: FILE_EXTENSION[];
   description: string;
@@ -30,6 +42,32 @@ export const fileOpen = async <M extends boolean | undefined = false>(opts: {
     }
     return acc.concat(`.${ext}`);
   }, [] as string[]);
+
+  const electronBridge = getElectronFileBridge();
+  if (electronBridge?.openFiles) {
+    const openedFiles = await electronBridge.openFiles({
+      description: opts.description,
+      extensions,
+      multiple: opts.multiple,
+    });
+    if (!openedFiles.length) {
+      throw new DOMException("The file dialog was cancelled.", "AbortError");
+    }
+    const files = await Promise.all(
+      openedFiles.map((file) =>
+        // Electron's IPC type is Uint8Array<ArrayBufferLike>, while the DOM
+        // File constructor only accepts an ArrayBuffer-backed view. Copying
+        // also prevents a transferred IPC buffer from being retained.
+        normalizeFile(
+          new File(
+            [new Uint8Array(file.data).buffer as ArrayBuffer],
+            file.name,
+          ),
+        ),
+      ),
+    );
+    return (opts.multiple ? files : files[0]) as RetType;
+  }
 
   const files = await _fileOpen({
     description: opts.description,
