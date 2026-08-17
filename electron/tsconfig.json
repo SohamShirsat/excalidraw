@@ -15,5 +15,5 @@
     "sourceMap": true,
     "noEmitOnError": true
   },
-  "include": ["./**/*.ts", "../excalidraw-app/scripts/PersonalWorkspaceServer.ts", "../excalidraw-app/data/workspaceTypes.ts", "../excalidraw-app/data/shortcutBindings.ts"]
+  "include": ["./**/*.ts", "../excalidraw-app/scripts/PersonalWorkspaceServer.ts", "../excalidraw-app/data/workspaceTypes.ts", "../excalidraw-app/data/shortcutBindings.ts", "../excalidraw-app/data/githubSyncTypes.ts"]
 }

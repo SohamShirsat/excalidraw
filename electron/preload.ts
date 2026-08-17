@@ -9,6 +9,12 @@ import type {
   SyntheticKeydownPayload,
 } from "./appIpcChannels";
 import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
+import type {
+  GithubConflictResolution,
+  GithubConnectInput,
+  GithubSyncSchedule,
+  GithubSyncStatus,
+} from "../excalidraw-app/data/githubSyncTypes";
 
 // Sandboxed Electron preloads may require Electron's built-in modules but not
 // sibling CommonJS modules. Keep these channel names local (and in sync with
@@ -32,6 +38,13 @@ const APP_IPC_CHANNELS = {
   appVersion: "app:version",
   settingsShortcutsRead: "settings:shortcuts:read",
   settingsShortcutsWrite: "settings:shortcuts:write",
+  githubSyncStatus: "github-sync:status",
+  githubSyncConnect: "github-sync:connect",
+  githubSyncDisconnect: "github-sync:disconnect",
+  githubSyncNow: "github-sync:now",
+  githubSyncResolveConflict: "github-sync:resolve-conflict",
+  githubSyncPreferences: "github-sync:preferences",
+  githubSyncChanged: "github-sync:changed",
 } as const;
 
 /**
@@ -141,6 +154,50 @@ const electronAppBridge = {
     overrides: Record<string, ShortcutBinding | null>,
   ): Promise<void> =>
     ipcRenderer.invoke(APP_IPC_CHANNELS.settingsShortcutsWrite, overrides),
+
+  /**
+   * GitHub backup/sync (`electron/githubSync.ts`). The token travels one way
+   * only — into `connect` — and is never returned by any of these; the
+   * renderer can learn `hasToken`, never the token itself.
+   */
+  githubSync: {
+    getStatus: (): Promise<GithubSyncStatus> =>
+      ipcRenderer.invoke(APP_IPC_CHANNELS.githubSyncStatus),
+
+    connect: (input: GithubConnectInput): Promise<GithubSyncStatus> =>
+      ipcRenderer.invoke(APP_IPC_CHANNELS.githubSyncConnect, input),
+
+    disconnect: (): Promise<GithubSyncStatus> =>
+      ipcRenderer.invoke(APP_IPC_CHANNELS.githubSyncDisconnect),
+
+    syncNow: (): Promise<GithubSyncStatus> =>
+      ipcRenderer.invoke(APP_IPC_CHANNELS.githubSyncNow),
+
+    resolveConflict: (
+      resolution: GithubConflictResolution,
+    ): Promise<GithubSyncStatus> =>
+      ipcRenderer.invoke(
+        APP_IPC_CHANNELS.githubSyncResolveConflict,
+        resolution,
+      ),
+
+    updatePreferences: (patch: {
+      schedule?: GithubSyncSchedule;
+      syncOnStart?: boolean;
+    }): Promise<GithubSyncStatus> =>
+      ipcRenderer.invoke(APP_IPC_CHANNELS.githubSyncPreferences, patch),
+
+    onStatusChange: (callback: (status: GithubSyncStatus) => void) => {
+      const listener = (_event: IpcRendererEvent, status: GithubSyncStatus) =>
+        callback(status);
+      ipcRenderer.on(APP_IPC_CHANNELS.githubSyncChanged, listener);
+      return () =>
+        ipcRenderer.removeListener(
+          APP_IPC_CHANNELS.githubSyncChanged,
+          listener,
+        );
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld("electronApp", electronAppBridge);

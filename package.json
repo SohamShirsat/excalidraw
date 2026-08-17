@@ -53,7 +53,8 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "electron-window-state": "5.0.3"
+    "electron-window-state": "5.0.3",
+    "isomorphic-git": "1.41.4"
   },
   "homepage": ".",
   "main": "electron-dist/electron/main.js",

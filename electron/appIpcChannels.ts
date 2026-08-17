@@ -16,6 +16,14 @@ export const APP_IPC_CHANNELS = {
   appVersion: "app:version",
   settingsShortcutsRead: "settings:shortcuts:read",
   settingsShortcutsWrite: "settings:shortcuts:write",
+  githubSyncStatus: "github-sync:status",
+  githubSyncConnect: "github-sync:connect",
+  githubSyncDisconnect: "github-sync:disconnect",
+  githubSyncNow: "github-sync:now",
+  githubSyncResolveConflict: "github-sync:resolve-conflict",
+  githubSyncPreferences: "github-sync:preferences",
+  /** One-directional main → renderer push whenever sync status changes. */
+  githubSyncChanged: "github-sync:changed",
 } as const;
 
 export type AppIpcChannel =
@@ -50,6 +58,7 @@ export type MenuActionId =
   | "change-canvas-background"
   | "open-settings"
   | "open-workspace-search"
+  | "open-page-palette"
   | "open-new-page";
 
 /** Options accepted by the `dialog:confirm` IPC handler in `electron/main.ts`. */

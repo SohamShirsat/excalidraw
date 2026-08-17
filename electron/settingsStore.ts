@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import type { GithubSyncPersistedState } from "./githubSync";
 import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
 
 const SETTINGS_FILE_NAME = "settings.json";
@@ -17,6 +18,15 @@ const SETTINGS_FILE_NAME = "settings.json";
  */
 export type SettingsFile = {
   shortcuts?: Record<string, ShortcutBinding | null>;
+  /**
+   * GitHub sync: which repository this Mac is connected to, plus when it
+   * last synced. The access token is NOT here in plain text — it lives in
+   * `githubToken` below, encrypted by Electron's `safeStorage` (macOS
+   * Keychain-backed) before it is ever written to disk.
+   */
+  githubSync?: GithubSyncPersistedState;
+  /** Base64 of the `safeStorage`-encrypted personal access token. */
+  githubToken?: string | null;
 };
 
 /**
@@ -88,3 +98,62 @@ export const writeShortcutOverrides = async (
   const settings = await readSettingsFile(settingsPath);
   await writeSettingsFile(settingsPath, { ...settings, shortcuts: overrides });
 };
+
+const EMPTY_SYNC_STATE: GithubSyncPersistedState = {
+  config: null,
+  lastSyncAt: null,
+  lastSyncSummary: null,
+};
+
+/**
+ * Builds the `GithubSyncStore` the sync engine depends on, over the same
+ * `settings.json` the shortcut overrides use.
+ *
+ * `encryptToken`/`decryptToken` are injected rather than importing
+ * Electron's `safeStorage` here, both for the usual testability reason and
+ * because encryption availability is a runtime property of the OS keychain —
+ * `electron/main.ts` decides what to pass, and a machine where `safeStorage`
+ * is unavailable simply refuses to store a token rather than silently
+ * writing one in plain text.
+ */
+export const createSettingsGithubSyncStore = ({
+  settingsPath,
+  encryptToken,
+  decryptToken,
+}: {
+  settingsPath: string;
+  encryptToken: (token: string) => string;
+  decryptToken: (encrypted: string) => string;
+}) => ({
+  read: async (): Promise<GithubSyncPersistedState> => {
+    const settings = await readSettingsFile(settingsPath);
+    return settings.githubSync ?? EMPTY_SYNC_STATE;
+  },
+
+  write: async (next: GithubSyncPersistedState): Promise<void> => {
+    const settings = await readSettingsFile(settingsPath);
+    await writeSettingsFile(settingsPath, { ...settings, githubSync: next });
+  },
+
+  readToken: async (): Promise<string | null> => {
+    const settings = await readSettingsFile(settingsPath);
+    if (!settings.githubToken) {
+      return null;
+    }
+    try {
+      return decryptToken(settings.githubToken);
+    } catch {
+      // A token encrypted under a different machine/keychain identity is
+      // unusable; treat it as absent so the UI prompts for a fresh one.
+      return null;
+    }
+  },
+
+  writeToken: async (token: string | null): Promise<void> => {
+    const settings = await readSettingsFile(settingsPath);
+    await writeSettingsFile(settingsPath, {
+      ...settings,
+      githubToken: token === null ? null : encryptToken(token),
+    });
+  },
+});

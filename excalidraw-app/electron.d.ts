@@ -14,6 +14,12 @@
 
 import type { ShortcutBinding } from "./data/shortcutBindings";
 import type { WorkspaceMetadata } from "./data/workspaceTypes";
+import type {
+  GithubConflictResolution,
+  GithubConnectInput,
+  GithubSyncSchedule,
+  GithubSyncStatus,
+} from "./data/githubSyncTypes";
 
 export interface ElectronWorkspaceBridge {
   readStatus: () => Promise<{
@@ -53,6 +59,7 @@ export type MenuActionId =
   | "change-canvas-background"
   | "open-settings"
   | "open-workspace-search"
+  | "open-page-palette"
   | "open-new-page";
 
 export interface ConfirmDialogOptions {
@@ -93,6 +100,27 @@ export interface ElectronAppBridge {
   writeShortcutOverrides: (
     overrides: Record<string, ShortcutBinding | null>,
   ) => Promise<void>;
+  /**
+   * GitHub backup/sync — see `electron/githubSync.ts`. Note that no method
+   * here ever returns the access token: it is write-only from the
+   * renderer's side, by design.
+   */
+  githubSync: {
+    getStatus: () => Promise<GithubSyncStatus>;
+    connect: (input: GithubConnectInput) => Promise<GithubSyncStatus>;
+    disconnect: () => Promise<GithubSyncStatus>;
+    syncNow: () => Promise<GithubSyncStatus>;
+    resolveConflict: (
+      resolution: GithubConflictResolution,
+    ) => Promise<GithubSyncStatus>;
+    updatePreferences: (patch: {
+      schedule?: GithubSyncSchedule;
+      syncOnStart?: boolean;
+    }) => Promise<GithubSyncStatus>;
+    onStatusChange: (
+      callback: (status: GithubSyncStatus) => void,
+    ) => () => void;
+  };
 }
 
 declare global {

@@ -8,6 +8,7 @@ import {
   ipcMain,
   net,
   protocol,
+  safeStorage,
   Menu,
 } from "electron";
 import windowStateKeeper from "electron-window-state";
@@ -21,17 +22,29 @@ import { createWorkspaceIpcHandlers } from "./ipcHandlers";
 import { WORKSPACE_IPC_CHANNELS } from "./ipcChannels";
 import { buildApplicationMenu } from "./menu";
 import {
+  createGithubSyncEngine,
+  millisecondsUntilNextSync,
+} from "./githubSync";
+import {
+  createSettingsGithubSyncStore,
   getSettingsFilePath,
   readShortcutOverrides,
   writeShortcutOverrides,
 } from "./settingsStore";
 import { resolveWorkspaceRoot } from "./workspaceRoot";
 
+import type { GithubSyncEngine } from "./githubSync";
 import type {
   ConfirmDialogOptions,
   OpenFilesDialogOptions,
 } from "./appIpcChannels";
 import type { ShortcutBinding } from "../excalidraw-app/data/shortcutBindings";
+import type {
+  GithubConflictResolution,
+  GithubConnectInput,
+  GithubSyncSchedule,
+  GithubSyncStatus,
+} from "../excalidraw-app/data/githubSyncTypes";
 
 const APP_DISPLAY_NAME = "Personal Excalidraw";
 // Renamed early (before `app.whenReady()`) so `app.getName()`/the About
@@ -253,6 +266,140 @@ const registerAppIpcHandlers = () => {
   );
 };
 
+/**
+ * GitHub backup/sync. All of the actual git work lives in
+ * `electron/githubSync.ts`; this is the thin Electron layer around it —
+ * token encryption via `safeStorage`, the IPC surface, and the timer that
+ * drives the "every hour / day / week / month" schedules.
+ */
+let githubSyncEngine: GithubSyncEngine | null = null;
+let autoSyncTimer: NodeJS.Timeout | null = null;
+// Never re-arm faster than this, whatever the persisted timestamps say — a
+// clock change or a corrupt lastSyncAt must not turn into a push loop.
+const MIN_AUTO_SYNC_DELAY_MS = 60 * 1000;
+
+const scheduleAutoSync = () => {
+  if (autoSyncTimer) {
+    clearTimeout(autoSyncTimer);
+    autoSyncTimer = null;
+  }
+  const engine = githubSyncEngine;
+  if (!engine) {
+    return;
+  }
+
+  void engine
+    .getStatus()
+    .then((status) => {
+      if (!status.config || !status.hasToken) {
+        return;
+      }
+      const delay = millisecondsUntilNextSync(
+        status.config.schedule,
+        status.lastSyncAt,
+        Date.now(),
+      );
+      if (delay === null) {
+        return;
+      }
+      autoSyncTimer = setTimeout(() => {
+        void engine
+          .sync()
+          .catch((error) =>
+            console.error("[electron/main] scheduled sync failed", error),
+          )
+          .finally(scheduleAutoSync);
+      }, Math.max(delay, MIN_AUTO_SYNC_DELAY_MS));
+    })
+    .catch((error) =>
+      console.error("[electron/main] could not schedule sync", error),
+    );
+};
+
+const registerGithubSyncHandlers = (workspaceRoot: string) => {
+  const settingsPath = getSettingsFilePath(app.getPath("userData"));
+
+  const store = createSettingsGithubSyncStore({
+    settingsPath,
+    encryptToken: (token) => {
+      if (!safeStorage.isEncryptionAvailable()) {
+        throw new Error(
+          "This Mac's keychain is unavailable, so the GitHub token cannot be stored securely. Sync is disabled until it is.",
+        );
+      }
+      return safeStorage.encryptString(token).toString("base64");
+    },
+    decryptToken: (encrypted) =>
+      safeStorage.decryptString(Buffer.from(encrypted, "base64")),
+  });
+
+  githubSyncEngine = createGithubSyncEngine({
+    getWorkspaceDir: () => workspaceRoot,
+    store,
+    onStatusChange: (status) => {
+      mainWindow?.webContents.send(APP_IPC_CHANNELS.githubSyncChanged, status);
+    },
+  });
+
+  const engine = githubSyncEngine;
+  // Every schedule-affecting operation re-arms the timer, so changing the
+  // cadence in Settings takes effect without a restart.
+  const withReschedule = async (
+    operation: () => Promise<GithubSyncStatus>,
+  ): Promise<GithubSyncStatus> => {
+    const status = await operation();
+    scheduleAutoSync();
+    return status;
+  };
+
+  ipcMain.handle(APP_IPC_CHANNELS.githubSyncStatus, () => engine.getStatus());
+  ipcMain.handle(
+    APP_IPC_CHANNELS.githubSyncConnect,
+    (_event, input: GithubConnectInput) =>
+      withReschedule(() => engine.connect(input)),
+  );
+  ipcMain.handle(APP_IPC_CHANNELS.githubSyncDisconnect, () =>
+    withReschedule(() => engine.disconnect()),
+  );
+  ipcMain.handle(APP_IPC_CHANNELS.githubSyncNow, () =>
+    withReschedule(() => engine.sync()),
+  );
+  ipcMain.handle(
+    APP_IPC_CHANNELS.githubSyncResolveConflict,
+    (_event, resolution: GithubConflictResolution) =>
+      withReschedule(() => engine.resolveConflict(resolution)),
+  );
+  ipcMain.handle(
+    APP_IPC_CHANNELS.githubSyncPreferences,
+    (_event, patch: { schedule?: GithubSyncSchedule; syncOnStart?: boolean }) =>
+      withReschedule(() => engine.updatePreferences(patch)),
+  );
+
+  console.info("[electron/main] GitHub sync handlers registered");
+};
+
+/**
+ * "Sync when the app opens", deferred so it never competes with the first
+ * paint or with the workspace load — a backup push is never urgent.
+ */
+const runStartupSyncIfEnabled = () => {
+  const engine = githubSyncEngine;
+  if (!engine) {
+    return;
+  }
+  void engine.getStatus().then((status) => {
+    if (status.config?.syncOnStart && status.hasToken) {
+      setTimeout(() => {
+        void engine
+          .sync()
+          .catch((error) =>
+            console.error("[electron/main] startup sync failed", error),
+          );
+      }, 5000);
+    }
+  });
+};
+
 const main = async () => {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
@@ -337,6 +484,7 @@ const main = async () => {
     const store = new PersonalWorkspaceStore(workspaceRoot);
     registerWorkspaceIpcHandlers(store);
     registerAppIpcHandlers();
+    registerGithubSyncHandlers(workspaceRoot);
 
     if (app.isPackaged) {
       registerAppProtocol();
@@ -354,6 +502,9 @@ const main = async () => {
       Menu.setApplicationMenu(buildApplicationMenu(mainWindow));
       console.info("[electron/main] application menu registered");
     }
+
+    scheduleAutoSync();
+    runStartupSyncIfEnabled();
 
     console.info("[electron/main] window created and loaded");
   } catch (error) {
