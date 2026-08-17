@@ -1,124 +1,117 @@
-<a href="https://excalidraw.com/" target="_blank" rel="noopener">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" alt="Excalidraw" srcset="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/github/excalidraw_github_cover_2_dark.png" />
-    <img alt="Excalidraw" src="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/github/excalidraw_github_cover_2.png" />
-  </picture>
-</a>
+# Personal Excalidraw
 
-<h4 align="center">
-  <a href="https://excalidraw.com">Excalidraw Editor</a> |
-  <a href="https://plus.excalidraw.com/blog">Blog</a> |
-  <a href="https://docs.excalidraw.com">Documentation</a> |
-  <a href="https://plus.excalidraw.com">Excalidraw+</a>
-</h4>
+A local-first drawing workspace for macOS, built on [Excalidraw](https://github.com/excalidraw/excalidraw).
 
-<div align="center">
-  <h2>
-    An open source virtual hand-drawn style whiteboard. </br>
-    Collaborative and end-to-end encrypted. </br>
-  <br />
-  </h2>
-</div>
+Excalidraw is a brilliant canvas, but on excalidraw.com a drawing is a browser tab. This fork turns it into a native desktop app with the thing a canvas is missing once you use it every day: **a real workspace**. Folders hold files, files hold pages, every page is an ordinary `.excalidraw` file in a folder on your Mac, and an optional one-way-you-control sync keeps a copy in a GitHub repository you own.
 
-<br />
-<p align="center">
-  <a href="https://github.com/excalidraw/excalidraw/blob/master/LICENSE">
-    <img alt="Excalidraw is released under the MIT license." src="https://img.shields.io/badge/license-MIT-blue.svg"  /></a>
-  <a href="https://www.npmjs.com/package/@excalidraw/excalidraw">
-    <img alt="npm downloads/month" src="https://img.shields.io/npm/dm/@excalidraw/excalidraw"  /></a>
-  <a href="https://docs.excalidraw.com/docs/introduction/contributing">
-    <img alt="PRs welcome!" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat"  /></a>
-  <a href="https://discord.gg/UexuTaE">
-    <img alt="Chat on Discord" src="https://img.shields.io/discord/723672430744174682?color=738ad6&label=Chat%20on%20Discord&logo=discord&logoColor=ffffff&widget=false"/></a>
-  <a href="https://deepwiki.com/excalidraw/excalidraw">
-    <img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg" /></a>
-  <a href="https://twitter.com/excalidraw">
-    <img alt="Follow Excalidraw on Twitter" src="https://img.shields.io/twitter/follow/excalidraw.svg?label=follow+@excalidraw&style=social&logo=twitter"/></a>
-</p>
+- **Local-first.** Your drawings are plain files in a folder you can see, back up, and open with anything else. There is no account, no server, and no telemetry.
+- **A workspace, not tabs.** Folders → files → pages, a persistent sidebar, page tabs, and a split view.
+- **Backed up on your terms.** Connect a private GitHub repo, then sync manually, on app launch, or on an hourly/daily/weekly/monthly schedule.
+- **Yours to rebind.** Every workspace shortcut is remappable in Settings → Shortcuts.
 
-<div align="center">
-  <figure>
-    <a href="https://excalidraw.com" target="_blank" rel="noopener">
-      <img src="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/github%2Fproduct_showcase.png" alt="Product showcase" />
-    </a>
-    <figcaption>
-      <p align="center">
-        Create beautiful hand-drawn like diagrams, wireframes, or whatever you like.
-      </p>
-    </figcaption>
-  </figure>
-</div>
+## Install
 
-## Features
+### Download
 
-The Excalidraw editor (npm package) supports:
+Grab the latest `.dmg` from [Releases](https://github.com/SohamShirsat/excalidraw/releases), drag the app to Applications, then **right-click → Open** the first time. The app is signed ad-hoc rather than with an Apple Developer ID, so Gatekeeper asks once and then never again.
 
-- 💯&nbsp;Free & open-source.
-- 🎨&nbsp;Infinite, canvas-based whiteboard.
-- ✍️&nbsp;Hand-drawn like style.
-- 🌓&nbsp;Dark mode.
-- 🏗️&nbsp;Customizable.
-- 📷&nbsp;Image support.
-- 😀&nbsp;Shape libraries support.
-- 🌐&nbsp;Localization (i18n) support.
-- 🖼️&nbsp;Export to PNG, SVG & clipboard.
-- 💾&nbsp;Open format - export drawings as an `.excalidraw` json file.
-- ⚒️&nbsp;Wide range of tools - rectangle, circle, diamond, arrow, line, free-draw, eraser...
-- ➡️&nbsp;Arrow-binding & labeled arrows.
-- 🔙&nbsp;Undo / Redo.
-- 🔍&nbsp;Zoom and panning support.
-
-## Excalidraw.com
-
-The app hosted at [excalidraw.com](https://excalidraw.com) is a minimal showcase of what you can build with Excalidraw. Its [source code](https://github.com/excalidraw/excalidraw/tree/master/excalidraw-app) is part of this repository as well, and the app features:
-
-- 📡&nbsp;PWA support (works offline).
-- 🤼&nbsp;Real-time collaboration.
-- 🔒&nbsp;End-to-end encryption.
-- 💾&nbsp;Local-first support (autosaves to the browser).
-- 🔗&nbsp;Shareable links (export to a readonly link you can share with others).
-
-We'll be adding these features as drop-in plugins for the npm package in the future.
-
-## Quick start
-
-**Note:** following instructions are for installing the Excalidraw [npm package](https://www.npmjs.com/package/@excalidraw/excalidraw) when integrating Excalidraw into your own app. To run the repository locally for development, please refer to our [Development Guide](https://docs.excalidraw.com/docs/introduction/development).
-
-Use `npm` or `yarn` to install the package.
+### Or build it yourself
 
 ```bash
-npm install react react-dom @excalidraw/excalidraw
-# or
-yarn add react react-dom @excalidraw/excalidraw
+git clone https://github.com/SohamShirsat/excalidraw.git
+cd excalidraw
+yarn install
+yarn electron:build
 ```
 
-Check out our [documentation](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/installation) for more details!
+The `.app`, `.dmg` and `.zip` land in `release/`.
 
-## Contributing
+## Where your drawings live
 
-- Missing something or found a bug? [Report here](https://github.com/excalidraw/excalidraw/issues).
-- Want to contribute? Check out our [contribution guide](https://docs.excalidraw.com/docs/introduction/contributing) or let us know on [Discord](https://discord.gg/UexuTaE).
-- Want to help with translations? See the [translation guide](https://docs.excalidraw.com/docs/introduction/contributing#translating).
+Everything is a file on disk, in one folder:
 
-## Integrations
+```
+personal-workspace/
+├── workspace.json            folder/file/page hierarchy
+├── library.excalidrawlib     your shape library
+├── folders/                  the same hierarchy, mirrored on disk
+└── <page>.excalidraw         one JSON file per page, drawings and images included
+```
 
-- [VScode extension](https://marketplace.visualstudio.com/items?itemName=pomdtr.excalidraw-editor)
-- [npm package](https://www.npmjs.com/package/@excalidraw/excalidraw)
+By default the app uses `~/Documents/Personal Excalidraw/personal-workspace`, and Settings → General shows the exact resolved path. Nothing is bundled inside the app: deleting the app never deletes a drawing.
 
-## Who's integrating Excalidraw
+Saving is automatic and debounced; there is no "save" step to remember. Don't hand-edit files in that folder while the app is running.
 
-[Google Cloud](https://googlecloudcheatsheet.withgoogle.com/architecture) • [Meta](https://meta.com/) • [CodeSandbox](https://codesandbox.io/) • [Obsidian Excalidraw](https://github.com/zsviczian/obsidian-excalidraw-plugin) • [Replit](https://replit.com/) • [Slite](https://slite.com/) • [Notion](https://notion.so/) • [HackerRank](https://www.hackerrank.com/) • and many others
+## Sync with GitHub
 
-## Sponsors & support
+Sync is **optional and off by default**. When it's on, the folder above becomes a git repository that is pushed to a GitHub repo you own. The folder stays the source of truth; GitHub is a durable, shareable backup — the app keeps working normally when GitHub is unreachable, or when you never set it up at all.
 
-If you like the project, you can become a sponsor at [Open Collective](https://opencollective.com/excalidraw) or use [Excalidraw+](https://plus.excalidraw.com/).
+### Setting it up
 
-## Thank you for supporting Excalidraw
+1. **Create an empty private repository** on GitHub (this app never creates repositories for you). Don't add a README — an empty repo makes the first sync trivial.
+2. **Create a fine-grained personal access token** at [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new):
+   - Repository access → _Only select repositories_ → the repo from step 1.
+   - Permissions → Repository permissions → **Contents: Read and write**.
+   - Nothing else. That single permission is all the app uses.
+3. In the app: **Settings → Sync**, paste `owner/repo` and the token, pick how often to sync automatically, and press **Connect repository**.
 
-[<img src="https://opencollective.com/excalidraw/tiers/sponsors/0/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/0/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/1/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/1/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/2/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/2/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/3/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/3/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/4/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/4/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/5/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/5/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/6/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/6/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/7/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/7/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/8/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/8/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/9/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/9/website) [<img src="https://opencollective.com/excalidraw/tiers/sponsors/10/avatar.svg?avatarHeight=120"/>](https://opencollective.com/excalidraw/tiers/sponsors/10/website)
+The token is encrypted with your macOS keychain (Electron's `safeStorage`) before it touches disk, and it is never sent back to the app's UI — the interface can only ever ask _whether_ a token exists.
 
-<a href="https://opencollective.com/excalidraw#category-CONTRIBUTE" target="_blank"><img src="https://opencollective.com/excalidraw/tiers/backers.svg?avatarHeight=32"/></a>
+### Using it day to day
 
-Last but not least, we're thankful to these companies for offering their services for free:
+The circular arrows in the left rail are both the status and the button:
 
-[![Vercel](./.github/assets/vercel.svg)](https://vercel.com) [![Sentry](./.github/assets/sentry.svg)](https://sentry.io) [![Crowdin](./.github/assets/crowdin.svg)](https://crowdin.com)
+| What you see    | What it means                                              |
+| --------------- | ---------------------------------------------------------- |
+| Plain icon      | Everything is backed up                                    |
+| Icon with a dot | You have unsynced changes — click to push them now         |
+| Spinning icon   | A sync is running                                          |
+| Red icon        | Something needs a decision — click to open Settings → Sync |
+
+Automatic syncs run on the schedule you picked, plus optionally a few seconds after the app opens.
+
+### Moving to another Mac
+
+Install the app there, connect it to the same repository, and choose **Use GitHub's copy** when it asks which version to start from. Your workspace arrives intact.
+
+### When both sides changed
+
+If this Mac and GitHub both moved on since the last sync and git can't merge them automatically, the app stops and asks rather than guessing. You choose **Keep this Mac's copy** or **Use GitHub's copy** — and either way the app writes a dated backup folder next to your workspace before replacing anything, so the losing version is never actually gone.
+
+Disconnecting only forgets the token on that Mac. Your workspace folder, its git history, and the GitHub repository are all left exactly as they are.
+
+## Keyboard
+
+Everything in Excalidraw's own canvas works as usual. On top of that:
+
+| Shortcut | Action |
+| --- | --- |
+| `⌘T` | Open a page — search everything you've got, with "New page…" as the last row |
+| `⌘N` | New page — pick the folder and file it belongs in |
+| `⌘P` | Search the whole workspace (pages, canvas text, assets, library) |
+| `⌘1` / `⌘2` / `⌘3` | Pages / Library / Search panel |
+| `⌘\` | Toggle the sidebar |
+| `⌘⌥\` | Toggle the design panel |
+| `⌘⇧\` | Open the current page to the side (split view) |
+| `⌘⌥←` / `⌘⌥→` | Previous / next page tab |
+| `⌘⇧W` | Close page tab |
+| `⌘,` | Settings |
+
+All of these are remappable in Settings → Shortcuts.
+
+## Development
+
+```bash
+yarn electron:dev      # native app against the Vite dev server
+yarn start:personal    # browser-only fallback, no Electron
+yarn test:all          # typecheck + lint + prettier + the full test suite
+yarn electron:build    # package the macOS app into release/
+```
+
+Architecture notes for contributors (and for AI assistants) live in [CLAUDE.md](CLAUDE.md).
+
+## Credit and licence
+
+This is a fork of [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw), which does all of the hard work — the canvas, the renderer, the file format, the library ecosystem. Everything here is a shell around it. MIT licensed, same as upstream; see [LICENSE](LICENSE).
+
+Features that depend on infrastructure a desktop user doesn't control — real-time collaboration, shareable encrypted links, the hosted AI features, analytics and error reporting — are deliberately removed rather than left half-working offline.
