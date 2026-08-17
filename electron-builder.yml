@@ -1,0 +1,22 @@
+# electron-builder config for the Personal Excalidraw desktop app.
+#
+# No Apple Developer ID is assumed (`identity: null`), matching the ad-hoc
+# signing already used by `scripts/install-personal-excalidraw-spotlight-app.sh`
+# (`codesign --force --deep --sign -`). The resulting unsigned .app needs a
+# right-click-Open the first time on macOS (Gatekeeper), same as that
+# existing launcher.
+appId: dev.soham.personal-excalidraw
+productName: Personal Excalidraw
+directories:
+  output: release
+files:
+  - electron-dist/**/*
+  - excalidraw-app/build/**/*
+  - package.json
+  - "!**/*.map"
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.productivity
+  identity: null

@@ -28,3 +28,5 @@ html
 meta*.json
 .claude
 personal-workspace
+electron-dist
+release

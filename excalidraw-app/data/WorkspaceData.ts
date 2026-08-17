@@ -7,42 +7,28 @@ import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
 
 import { STORAGE_KEYS } from "../app_constants";
 
-export const WORKSPACE_VERSION = 1;
+import * as WorkspaceTransport from "./workspaceTransport";
+import {
+  WORKSPACE_VERSION,
+  type WorkspaceFolder,
+  type WorkspaceFile,
+  type WorkspacePage,
+  type WorkspaceMetadata,
+} from "./workspaceTypes";
+
+// Re-exported so existing consumers can keep importing these from
+// "./WorkspaceData" — the shapes themselves live in "./workspaceTypes" so
+// Node/Electron-side code can depend on just the types without pulling in
+// this file's browser-only imports (idb-keyval, @excalidraw/excalidraw).
+export {
+  WORKSPACE_VERSION,
+  type WorkspaceFolder,
+  type WorkspaceFile,
+  type WorkspacePage,
+  type WorkspaceMetadata,
+};
+
 export const WORKSPACE_SIDEBAR_TAB = "workspace";
-
-export type WorkspaceFolder = {
-  id: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type WorkspaceFile = {
-  id: string;
-  folderId: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type WorkspacePage = {
-  id: string;
-  fileId: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type WorkspaceMetadata = {
-  version: typeof WORKSPACE_VERSION;
-  name: string;
-  folders: WorkspaceFolder[];
-  files: WorkspaceFile[];
-  pages: WorkspacePage[];
-  activePageId: string;
-  createdAt: number;
-  updatedAt: number;
-};
 
 export type WorkspaceItemType = "folder" | "file" | "page";
 
@@ -59,71 +45,6 @@ const workspaceStore = createStore(
 
 const METADATA_KEY = "metadata";
 const sceneKey = (pageId: string) => `scene:${pageId}`;
-const REPOSITORY_API = "/api/personal-workspace";
-
-type RepositoryWorkspaceStatus = {
-  workspace: WorkspaceMetadata | null;
-  missingPageIds: string[];
-  directory: string;
-};
-
-const repositoryRequest = async <T>(
-  pathname: string,
-  init?: RequestInit,
-): Promise<T> => {
-  let response: Response;
-  try {
-    response = await fetch(`${REPOSITORY_API}${pathname}`, {
-      ...init,
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        ...init?.headers,
-      },
-    });
-  } catch (error) {
-    throw new Error(
-      "The repository workspace is unavailable. Start Personal Excalidraw with its local launcher.",
-      { cause: error },
-    );
-  }
-
-  const body = (await response.json()) as T & { error?: string };
-  if (!response.ok) {
-    throw new Error(
-      body.error ||
-        "Personal Excalidraw could not save to personal-workspace/.",
-    );
-  }
-
-  return body;
-};
-
-const loadRepositoryWorkspace = () =>
-  repositoryRequest<RepositoryWorkspaceStatus>("");
-
-const saveRepositoryMetadata = (workspace: WorkspaceMetadata) =>
-  repositoryRequest<{ saved: true }>("/metadata", {
-    method: "PUT",
-    body: JSON.stringify(workspace),
-  });
-
-const loadRepositoryPageScene = (pageId: string) =>
-  repositoryRequest<{ scene: string | null }>(
-    `/pages/${encodeURIComponent(pageId)}`,
-  );
-
-const saveRepositoryPageScene = (pageId: string, scene: string) =>
-  repositoryRequest<{ saved: true }>(`/pages/${encodeURIComponent(pageId)}`, {
-    method: "PUT",
-    body: JSON.stringify({ scene }),
-  });
-
-const deleteRepositoryPageScenes = (pageIds: string[]) =>
-  repositoryRequest<{ deleted: true }>("/pages", {
-    method: "DELETE",
-    body: JSON.stringify({ pageIds }),
-  });
 
 const createId: WorkspaceIdFactory = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -474,7 +395,7 @@ export class WorkspaceData {
   );
 
   static async loadOrCreate(initialFileName?: string) {
-    const repositoryStatus = await loadRepositoryWorkspace();
+    const repositoryStatus = await WorkspaceTransport.getWorkspaceStatus();
     const cachedWorkspace = await get<WorkspaceMetadata>(
       METADATA_KEY,
       workspaceStore,
@@ -486,7 +407,7 @@ export class WorkspaceData {
       for (const pageId of repositoryStatus.missingPageIds) {
         const cachedScene = await get<string>(sceneKey(pageId), workspaceStore);
         if (cachedScene) {
-          await saveRepositoryPageScene(pageId, cachedScene);
+          await WorkspaceTransport.writePageScene(pageId, cachedScene);
         }
       }
 
@@ -501,7 +422,7 @@ export class WorkspaceData {
     for (const page of workspace.pages) {
       const cachedScene = await get<string>(sceneKey(page.id), workspaceStore);
       if (cachedScene) {
-        await saveRepositoryPageScene(page.id, cachedScene);
+        await WorkspaceTransport.writePageScene(page.id, cachedScene);
       }
     }
 
@@ -509,12 +430,12 @@ export class WorkspaceData {
   }
 
   static async saveMetadata(workspace: WorkspaceMetadata) {
-    await saveRepositoryMetadata(workspace);
+    await WorkspaceTransport.writeMetadata(workspace);
     await set(METADATA_KEY, workspace, workspaceStore);
   }
 
   static async loadPageScene(pageId: string) {
-    const { scene } = await loadRepositoryPageScene(pageId);
+    const scene = await WorkspaceTransport.readPageScene(pageId);
     if (scene) {
       await set(sceneKey(pageId), scene, workspaceStore);
       WorkspaceData._savedSceneJSON.set(pageId, scene);
@@ -523,7 +444,7 @@ export class WorkspaceData {
 
     const cachedScene = await get<string>(sceneKey(pageId), workspaceStore);
     if (cachedScene) {
-      await saveRepositoryPageScene(pageId, cachedScene);
+      await WorkspaceTransport.writePageScene(pageId, cachedScene);
       WorkspaceData._savedSceneJSON.set(pageId, cachedScene);
     }
     return cachedScene;
@@ -542,7 +463,7 @@ export class WorkspaceData {
   }
 
   static async savePageSceneJSON(pageId: string, scene: string) {
-    await saveRepositoryPageScene(pageId, scene);
+    await WorkspaceTransport.writePageScene(pageId, scene);
     await set(sceneKey(pageId), scene, workspaceStore);
     WorkspaceData._savedSceneJSON.set(pageId, scene);
     WorkspaceData._pendingSceneJSON.delete(pageId);
@@ -571,7 +492,7 @@ export class WorkspaceData {
   }
 
   static async deletePageScenes(pageIds: string[]) {
-    await deleteRepositoryPageScenes(pageIds);
+    await WorkspaceTransport.deletePageScenes(pageIds);
     await Promise.all(
       pageIds.map((pageId) => del(sceneKey(pageId), workspaceStore)),
     );

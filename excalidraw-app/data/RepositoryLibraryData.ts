@@ -4,52 +4,13 @@ import type {
   LibraryPersistenceAdapter,
 } from "@excalidraw/excalidraw/data/library";
 
+import * as WorkspaceTransport from "./workspaceTransport";
 import { LibraryIndexedDBAdapter } from "./LocalData";
 
-const REPOSITORY_LIBRARY_API = "/api/personal-workspace/library";
-
-type RepositoryLibraryResponse = {
-  library: LibraryPersistedData | null;
-  directory: string;
-};
-
-const requestRepositoryLibrary = async <T>(init?: RequestInit): Promise<T> => {
-  let response: Response;
-  try {
-    response = await fetch(REPOSITORY_LIBRARY_API, {
-      ...init,
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        ...init?.headers,
-      },
-    });
-  } catch (error) {
-    throw new Error(
-      "The repository library is unavailable. Start Personal Excalidraw with its local launcher.",
-      { cause: error },
-    );
-  }
-
-  const body = (await response.json()) as T & { error?: string };
-  if (!response.ok) {
-    throw new Error(
-      body.error ||
-        "Personal Excalidraw could not save the library to personal-workspace/.",
-    );
-  }
-
-  return body;
-};
-
-const loadRepositoryLibrary = () =>
-  requestRepositoryLibrary<RepositoryLibraryResponse>();
+const loadRepositoryLibrary = () => WorkspaceTransport.readLibrary();
 
 const saveRepositoryLibrary = (library: LibraryPersistedData) =>
-  requestRepositoryLibrary<{ saved: true; directory: string }>({
-    method: "PUT",
-    body: JSON.stringify(library),
-  });
+  WorkspaceTransport.writeLibrary(library.libraryItems);
 
 /**
  * Keeps the repository library as the durable source of truth. On the first
@@ -59,13 +20,20 @@ const saveRepositoryLibrary = (library: LibraryPersistedData) =>
 export const RepositoryLibraryAdapter: LibraryPersistenceAdapter = {
   async load(_metadata: { source: LibraryAdatapterSource }) {
     const repositoryData = await loadRepositoryLibrary();
-    if (repositoryData.library) {
-      void Promise.resolve(
-        LibraryIndexedDBAdapter.save(repositoryData.library),
-      ).catch((error: unknown) => {
-        console.error("Couldn't update the browser library fallback.", error);
-      });
-      return repositoryData.library;
+    // The transport layer deliberately types library payloads as `unknown[]`
+    // (it mirrors the untyped IPC/HTTP boundary — see workspaceTransport.ts)
+    // rather than depending on @excalidraw/excalidraw's types. The store on
+    // the other end already validates this shape (`isLibraryData` in
+    // PersonalWorkspaceServer.ts), so this is a trusted narrowing, not a
+    // new assumption.
+    const library = repositoryData.library as LibraryPersistedData | null;
+    if (library) {
+      void Promise.resolve(LibraryIndexedDBAdapter.save(library)).catch(
+        (error: unknown) => {
+          console.error("Couldn't update the browser library fallback.", error);
+        },
+      );
+      return library;
     }
 
     const browserData = await LibraryIndexedDBAdapter.load();

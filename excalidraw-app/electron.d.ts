@@ -1,0 +1,38 @@
+/**
+ * Ambient bridge type exposed by `electron/preload.ts` via
+ * `contextBridge.exposeInMainWorld("electronWorkspace", ...)`. Only present
+ * when the renderer is running inside the Electron app; absent in the plain
+ * browser dev app, where `excalidraw-app/data/workspaceTransport.ts` falls
+ * back to `fetch` against `PersonalWorkspaceServer.ts`'s HTTP API instead.
+ *
+ * Kept structurally in sync with `electron/preload.ts`'s exposed object by
+ * hand — the two live in separate TypeScript programs (this one is checked
+ * as part of `excalidraw-app`'s bundler-resolution build, `electron/` is
+ * checked as part of its own Node-targeted, CommonJS-output build) so there
+ * isn't a single shared compiled type to import across that boundary.
+ */
+
+import type { WorkspaceMetadata } from "./data/workspaceTypes";
+
+export interface ElectronWorkspaceBridge {
+  readStatus: () => Promise<{
+    workspace: WorkspaceMetadata | null;
+    missingPageIds: string[];
+    directory: string;
+  }>;
+  readLibrary: () => Promise<{
+    library: { libraryItems: unknown[] } | null;
+    directory: string;
+  }>;
+  writeLibrary: (libraryItems: readonly unknown[]) => Promise<void>;
+  writeMetadata: (metadata: WorkspaceMetadata) => Promise<void>;
+  readPageScene: (pageId: string) => Promise<string | null>;
+  writePageScene: (pageId: string, scene: string) => Promise<void>;
+  deletePageScenes: (pageIds: string[]) => Promise<void>;
+}
+
+declare global {
+  interface Window {
+    electronWorkspace?: ElectronWorkspaceBridge;
+  }
+}

@@ -19,7 +19,7 @@ import type {
   WorkspaceFolder,
   WorkspaceMetadata,
   WorkspacePage,
-} from "../data/WorkspaceData";
+} from "../data/workspaceTypes";
 
 const API_ROOT = "/api/personal-workspace";
 const MAX_REQUEST_BYTES = 128 * 1024 * 1024;
